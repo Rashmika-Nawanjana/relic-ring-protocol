@@ -31,7 +31,7 @@ function CanvasWrapper() {
     <Canvas
       shadows
       dpr={[1, 2]}
-      camera={{ position: [-22, 14, 18], fov: 45, near: 0.1, far: 300 }}
+      camera={{ position: [-32, 20, 26], fov: 42, near: 0.1, far: 400 }}
       gl={{
         antialias: true,
         alpha: false,
@@ -57,13 +57,13 @@ export function SimulatorApp() {
               Relic Ring Protocol
             </h1>
             <p className="text-xs text-zinc-400">
-              Drag to orbit · scroll to zoom · right-drag to pan · Reset view if lost
+              Hover planets for specs · click to inspect towers · scroll to zoom
             </p>
           </div>
         </div>
 
-        {/* Side panel */}
-        <div className="flex max-h-[50vh] flex-col gap-3 overflow-y-auto border-t border-zinc-800 bg-zinc-950/95 p-3 lg:max-h-full lg:w-96 lg:border-t-0 lg:border-l">
+        {/* Side panel — narrower so the 3D view dominates */}
+        <div className="flex max-h-[45vh] flex-col gap-3 overflow-y-auto border-t border-zinc-800/80 bg-zinc-950/90 p-3 backdrop-blur-sm lg:max-h-full lg:w-80 lg:border-t-0 lg:border-l">
           <ControlPanel />
           <PacketTrace />
           <LatencyBreakdown />

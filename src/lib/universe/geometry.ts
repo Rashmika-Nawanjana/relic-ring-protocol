@@ -10,12 +10,14 @@ const PLANET_COLORS: Record<string, string> = {
 };
 
 /** Map config coordinates to 3D scene units (XZ plane, Y-up). */
-const POSITION_SCALE = 0.018;
-const RADIUS_SCALE = 0.00035;
-const MIN_ORBIT_FROM_SUN = 2.8;
+const POSITION_SCALE = 0.021;
+const MIN_ORBIT_FROM_SUN = 4.2;
 
+/** Visual-only sizing — does not affect physics/routing math. */
 export function visualRadius(radiusKm: number): number {
-  return Math.max(0.15, Math.pow(radiusKm, 0.45) * RADIUS_SCALE);
+  const earthRef = 6371;
+  const normalized = radiusKm / earthRef;
+  return Math.max(0.5, Math.pow(normalized, 0.32) * 0.9);
 }
 
 export function planetOrbitRadius(node: PlanetNode): number {

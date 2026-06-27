@@ -25,22 +25,18 @@ export function CameraRig() {
     animating.current = true;
   };
 
-  // Fly to planet once when selected (does not lock camera afterward)
+  // Fly to planet when clicked for tower / surface detail
   useEffect(() => {
     if (!selectedId) return;
     const planet = planets.find((p) => p.node.id === selectedId);
     if (!planet) return;
 
     const planetPos = new THREE.Vector3(...planet.position);
-    const offset = new THREE.Vector3(
-      0,
-      planet.visualRadius * 2.5,
-      planet.visualRadius * 4,
-    );
+    const r = planet.visualRadius;
+    const offset = new THREE.Vector3(r * 0.6, r * 1.4, r * 2.8);
     startAnimation(planetPos.clone().add(offset), planetPos);
   }, [selectedId, planets]);
 
-  // Reset to default view when button pressed
   useEffect(() => {
     if (resetViewTick === 0) return;
     startAnimation(
@@ -49,17 +45,27 @@ export function CameraRig() {
     );
   }, [resetViewTick]);
 
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const planet = selectedId
+      ? planets.find((p) => p.node.id === selectedId)
+      : null;
+    controls.minDistance = planet ? planet.visualRadius * 1.35 : 2;
+    controls.maxDistance = 140;
+  }, [selectedId, planets]);
+
   useFrame(() => {
     const controls = controlsRef.current;
     if (!animating.current || !controls) return;
 
-    camera.position.lerp(goalPosition.current, 0.1);
-    controls.target.lerp(goalTarget.current, 0.1);
+    camera.position.lerp(goalPosition.current, 0.08);
+    controls.target.lerp(goalTarget.current, 0.08);
     controls.update();
 
     if (
-      camera.position.distanceTo(goalPosition.current) < 0.15 &&
-      controls.target.distanceTo(goalTarget.current) < 0.15
+      camera.position.distanceTo(goalPosition.current) < 0.12 &&
+      controls.target.distanceTo(goalTarget.current) < 0.12
     ) {
       camera.position.copy(goalPosition.current);
       controls.target.copy(goalTarget.current);
@@ -73,12 +79,12 @@ export function CameraRig() {
       ref={controlsRef}
       makeDefault
       enableDamping
-      dampingFactor={0.05}
+      dampingFactor={0.06}
       enablePan
       enableZoom
       enableRotate
-      minDistance={1.5}
-      maxDistance={120}
+      minDistance={2}
+      maxDistance={140}
       screenSpacePanning
     />
   );
