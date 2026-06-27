@@ -114,45 +114,6 @@ src/components/
   solar-system/               # R3F 3D scene
 src/app/api/                  # REST endpoints
 ```
-
----
-
-## Demo video script (M1–M4)
-
-### M1 — Universe initialization (~2 min)
-
-1. Show `universe-config.json` in the editor (6 nodes, metadata).
-2. Start the app — **“Universe initialized — Zeta-26”** banner appears.
-3. Optional: `curl http://localhost:3000/api/universe | jq .universe_metadata`
-4. Pan the 3D view — all planets, towers, void links visible.
-
-### M2 — Multi-hop proof (~3 min)
-
-1. Set **Origin: Aegis**, **Destination: Caelum**, message `Hello world`.
-2. Click **Send packet** — route highlights (e.g. Aegis → Dawn → Caelum).
-3. Open **Packet trace** — show ASCII bytes, then encoding at each send hop with different **Base** badges.
-4. Expand **Packet schema** — `origin_id`, `payload`, `hop_log` length.
-5. Watch the live transit bar and 3D packet pulse along the path.
-
-### M3 — Latency breakdown (~2 min)
-
-1. Scroll to **Latency** panel — Fiber / Tower / Atmo / Void totals.
-2. Show the **per-hop table** (planet rows + void rows like `Aegis → Dawn`).
-3. Compare total ms with `POST /api/route` JSON `total_latency_ms`.
-
-### M4 — Chaos test (~3 min)
-
-**Node kill**
-
-1. Click **Dawn** in the 3D view → **Kill Dawn**.
-2. Resend Aegis → Caelum — show new route avoiding Dawn.
-
-**Link sever**
-
-1. In **Void link**, pick `Aegis-Dawn` → **Sever void link**.
-2. Resend — route must avoid that edge even if Dawn is online.
-3. **Restore** node/link and confirm routing returns.
-
 ---
 
 ## Controls
