@@ -60,6 +60,7 @@ export type HopLogEntry = {
   action: "receive" | "send" | "transit";
   latency_ms: number;
   encoding?: string;
+  encoding_base?: number;
   components?: LatencyComponents;
 };
 
@@ -76,6 +77,7 @@ export type Packet = {
 export type RouteResult =
   | {
       ok: true;
+      message: string;
       route: string[];
       total_latency_ms: number;
       hops: HopLogEntry[];

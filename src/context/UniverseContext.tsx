@@ -36,6 +36,7 @@ type UniverseContextValue = {
   route: string[];
   routeResult: RouteResult | null;
   isSending: boolean;
+  packetTransmitKey: number;
   sceneSettings: SceneSettings;
   setSceneSettings: (patch: Partial<SceneSettings>) => void;
   resetView: () => void;
@@ -66,6 +67,7 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
   const [route, setRoute] = useState<string[]>([]);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [packetTransmitKey, setPacketTransmitKey] = useState(0);
   const [sceneSettings, setSceneSettingsState] = useState<SceneSettings>(DEFAULT_SCENE);
   const [resetViewTick, setResetViewTick] = useState(0);
 
@@ -101,6 +103,7 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
       const result = findRoute(config, origin, destination, killed, message);
       setRouteResult(result);
       setRoute(result.ok ? result.route : []);
+      if (result.ok) setPacketTransmitKey((k) => k + 1);
       setIsSending(false);
     },
     [config, killed],
@@ -118,6 +121,7 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
         route,
         routeResult,
         isSending,
+        packetTransmitKey,
         sceneSettings,
         setSceneSettings,
         resetView,

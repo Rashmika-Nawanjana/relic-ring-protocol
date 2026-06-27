@@ -15,16 +15,16 @@ function Bar({
 }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="w-16 shrink-0 text-zinc-500">{label}</span>
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800">
+    <div className="flex items-center gap-3 text-xs">
+      <span className="w-12 shrink-0 text-zinc-500">{label}</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
         <div
-          className="h-full rounded-full transition-all"
+          className="h-full rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, backgroundColor: color }}
         />
       </div>
-      <span className="w-16 text-right font-mono text-zinc-400">
-        {value.toFixed(2)} ms
+      <span className="w-14 text-right font-mono text-zinc-500">
+        {value.toFixed(1)}
       </span>
     </div>
   );
@@ -35,15 +35,10 @@ export function LatencyBreakdown() {
 
   if (!routeResult?.ok) {
     return (
-      <section
-        className="rounded-xl border border-zinc-800 bg-zinc-950/90 p-4 backdrop-blur-md"
-        aria-label="Latency breakdown"
-      >
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-300">
-          Latency Breakdown
-        </h2>
+      <section className="panel-section" aria-label="Latency breakdown">
+        <h2 className="text-base font-medium text-zinc-100">Latency</h2>
         <p className="mt-2 text-sm text-zinc-500">
-          Per-component fiber / tower / atmosphere / void (M3).
+          Fiber, tower, atmosphere, and void time per route.
         </p>
       </section>
     );
@@ -64,30 +59,20 @@ export function LatencyBreakdown() {
     1.1;
 
   return (
-    <section
-      className="rounded-xl border border-zinc-800 bg-zinc-950/90 p-4 backdrop-blur-md"
-      aria-label="Latency breakdown"
-    >
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-300">
-        Latency Breakdown · M3
-      </h2>
-      <p className="mt-1 text-xs text-zinc-500">
-        Total route: {routeResult.total_latency_ms.toFixed(2)} ms
-      </p>
-      <div className="mt-4 flex flex-col gap-2">
-        <Bar label="Fiber" value={totals.fiber} max={max} color="#34d399" />
-        <Bar label="Towers" value={totals.towers} max={max} color="#fbbf24" />
-        <Bar
-          label="Atmo"
-          value={totals.atmosphere}
-          max={max}
-          color="#38bdf8"
-        />
-        <Bar label="Void" value={totals.void} max={max} color="#818cf8" />
+    <section className="panel-section" aria-label="Latency breakdown">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-base font-medium text-zinc-100">Latency</h2>
+        <span className="font-mono text-sm text-[var(--accent)]">
+          {routeResult.total_latency_ms.toFixed(1)} ms
+        </span>
       </div>
-      <p className="mt-3 text-[10px] leading-relaxed text-zinc-600">
-        L = center distance × scale − (R₁+h₁) − (R₂+h₂) · Tv = ((h₁n₁)+(h₂n₂)+L)/C
-      </p>
+
+      <div className="mt-4 flex flex-col gap-2.5">
+        <Bar label="Fiber" value={totals.fiber} max={max} color="#6ee7b7" />
+        <Bar label="Tower" value={totals.towers} max={max} color="#fcd34d" />
+        <Bar label="Atmo" value={totals.atmosphere} max={max} color="#7dd3fc" />
+        <Bar label="Void" value={totals.void} max={max} color="#a5b4fc" />
+      </div>
     </section>
   );
 }

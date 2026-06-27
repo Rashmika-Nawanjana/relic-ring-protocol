@@ -123,9 +123,9 @@ export function findRoute(
     total += internal.total_ms;
 
     const nextPlanet = route[i + 1];
-    const encoding = nextPlanet
-      ? encodePayloadAscii(message, nodeMap.get(nextPlanet)!.codex)
-      : encodePayloadAscii(message, planet.codex);
+    const encodingPlanet = nextPlanet ? nodeMap.get(nextPlanet)! : planet;
+    const encoding = encodePayloadAscii(message, encodingPlanet.codex);
+    const encodingBase = encodingPlanet.codex;
 
     for (let t = 0; t < tr.viaTowers.length; t++) {
       const towerIdx = tr.viaTowers[t];
@@ -143,6 +143,7 @@ export function findRoute(
         action,
         latency_ms: t === 0 ? internal.total_ms : 0,
         encoding: isLastTower ? encoding : undefined,
+        encoding_base: isLastTower ? encodingBase : undefined,
         components: t === 0 ? internal : undefined,
       });
     }
@@ -164,6 +165,7 @@ export function findRoute(
 
   return {
     ok: true,
+    message,
     route,
     total_latency_ms: total,
     hops,

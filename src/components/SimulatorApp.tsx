@@ -9,6 +9,7 @@ import { ControlPanel } from "@/components/ControlPanel";
 import { PacketTrace } from "@/components/PacketTrace";
 import { LatencyBreakdown } from "@/components/LatencyBreakdown";
 import { SceneControls } from "@/components/SceneControls";
+import { PacketLiveFeed } from "@/components/PacketLiveFeed";
 
 const DynamicCanvas = dynamic(
   () => Promise.resolve({ default: CanvasWrapper }),
@@ -16,11 +17,11 @@ const DynamicCanvas = dynamic(
     ssr: false,
     loading: () => (
       <div
-        className="flex h-full w-full items-center justify-center bg-zinc-950"
+        className="flex h-full w-full items-center justify-center bg-[#050508]"
         aria-busy="true"
         aria-label="Loading 3D universe"
       >
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-zinc-700 border-t-indigo-400" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-[var(--accent)]" />
       </div>
     ),
   },
@@ -47,27 +48,26 @@ function CanvasWrapper() {
 export function SimulatorApp() {
   return (
     <UniverseProvider>
-      <div className="relative flex h-[100dvh] w-full flex-col bg-zinc-950 text-zinc-50 lg:flex-row">
-        {/* Full-screen 3D */}
-        <div className="relative min-h-[55vh] flex-1 lg:min-h-full">
+      <div className="relative flex h-[100dvh] w-full flex-col bg-[#050508] text-zinc-100 lg:flex-row">
+        <div className="relative min-h-[58vh] flex-1 lg:min-h-full">
           <DynamicCanvas />
           <SceneControls />
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-[100] bg-gradient-to-b from-black/70 to-transparent px-4 py-3">
-            <h1 className="text-lg font-semibold tracking-tight">
-              Relic Ring Protocol
-            </h1>
-            <p className="text-xs text-zinc-400">
-              Hover planets · left-drag pan · right-drag orbit · scroll zoom
-            </p>
-          </div>
+          <PacketLiveFeed />
         </div>
 
-        {/* Side panel — narrower so the 3D view dominates */}
-        <div className="flex max-h-[45vh] flex-col gap-3 overflow-y-auto border-t border-zinc-800/80 bg-zinc-950/90 p-3 backdrop-blur-sm lg:max-h-full lg:w-80 lg:border-t-0 lg:border-l">
+        <aside className="flex max-h-[42vh] w-full flex-col overflow-y-auto border-t border-white/6 bg-[var(--panel-bg)] backdrop-blur-xl lg:max-h-full lg:w-[22rem] lg:border-t-0 lg:border-l">
+          <header className="hidden border-b border-white/6 px-5 py-4 lg:block">
+            <h1 className="text-lg font-medium tracking-tight text-zinc-100">
+              Relic Ring
+            </h1>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Zeta-26 routing simulator
+            </p>
+          </header>
           <ControlPanel />
           <PacketTrace />
           <LatencyBreakdown />
-        </div>
+        </aside>
       </div>
     </UniverseProvider>
   );
