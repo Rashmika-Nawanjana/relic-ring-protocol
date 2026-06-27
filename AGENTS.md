@@ -5,6 +5,7 @@ Launch 26 hackathon: interplanetary network routing simulator.
 ## Stack
 
 - Next.js 16 (App Router, TypeScript, Tailwind) in `src/`
+- React Three Fiber + drei + tunnel-rat (`src/components/canvas/`, `src/helpers/`)
 - Supabase clients in `src/lib/supabase/` (browser, server, middleware)
 - Deploy target: Vercel
 - Full spec: [problem.md](./problem.md)
@@ -27,6 +28,7 @@ Invoke with `/skill-name` or `@skill-name` in chat:
 | `nextjs-supabase-stack` | Pages, API routes, Supabase auth/data, Vercel deploy |
 | `build-milestone` | Implementing M1–M4 demo milestones |
 | `ui-ux-design` | Designing or building UI — layout, accessibility, responsive, feedback |
+| `react-three-next` | 3D canvas, View portaling, StarMap, R3F scenes |
 
 Skills live in `.cursor/skills/<name>/SKILL.md`.
 

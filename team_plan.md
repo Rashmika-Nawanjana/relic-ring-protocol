@@ -43,21 +43,21 @@
 
 ### Files to own:
 - `app/page.tsx`
-- `components/StarMap.tsx`
+- `components/StarMap.tsx` (or extend `components/canvas/StarMapScene.tsx`)
+- `components/canvas/View.tsx` — 3D viewport (react-three-next pattern)
 - `components/PacketTrace.tsx`
 - `components/LatencyBreakdown.tsx`
 - `components/ControlPanel.tsx`
 
 ### Tasks in order:
 1. Set up Next.js project, push to GitHub, connect Vercel — get a live URL early
-2. Build `StarMap.tsx` — render all planets as circles on SVG canvas, correct relative positions
-3. Add tower markers on each planet (clockwise from top, correct count)
-4. Add `ControlPanel.tsx` — origin dropdown, destination dropdown, message input, Send button, Kill Node button
-5. Wire Send button to `POST /api/send` — show loading state
-6. Animate the packet path on the star map — highlight planets in route order with a delay
-7. Build `PacketTrace.tsx` — show hop log table with encoding at each planet
-8. Build `LatencyBreakdown.tsx` — show fiber/tower/atmosphere/void per hop as a bar or table
-9. Add kill node UI — click a planet on the map to kill it, show it greyed out, re-send to prove rerouting
+2. Build star map — use `View` + `StarMapScene` (R3F) or SVG; planets at scaled coordinates, tower markers clockwise from top
+3. Add `ControlPanel.tsx` — origin dropdown, destination dropdown, message input, Send button, Kill Node button
+4. Wire Send button to `POST /api/send` — show loading state
+5. Animate the packet path on the star map — highlight planets in route order with a delay
+6. Build `PacketTrace.tsx` — show hop log table with encoding at each planet
+7. Build `LatencyBreakdown.tsx` — show fiber/tower/atmosphere/void per hop as a bar or table
+8. Add kill node UI — click a planet on the map to kill it, show it greyed out, re-send to prove rerouting
 
 ---
 
