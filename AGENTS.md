@@ -48,5 +48,3 @@ See [problem.md](./problem.md). Top five:
 3. Pre-filter graph edges by Lmax (50,000,000 km) before routing
 4. ASCII only inside a planet between towers; convert at the sending tower
 5. Void distance uses planet centers minus radii minus atmosphere — not tower positions
-
-
