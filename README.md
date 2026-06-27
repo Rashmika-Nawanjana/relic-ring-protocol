@@ -1,6 +1,6 @@
 # Relic Ring Protocol
 
-Launch 26 — **Zeta-26 interplanetary routing simulator**. A 3D visualization and protocol engine that reads `universe-config.json`, computes lowest-latency routes under physical constraints, translates payloads across planetary codexes, and reroutes around failed nodes or severed void links.
+**Zeta-26 interplanetary routing simulator**. A 3D visualization and protocol engine that reads `universe-config.json`, computes lowest-latency routes under physical constraints, translates payloads across planetary codexes, and reroutes around failed nodes or severed void links.
 
 ## Quick start
 
