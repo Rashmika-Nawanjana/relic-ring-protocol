@@ -111,3 +111,4 @@ For a void transmission, pick the **tower pair** (one per planet) with the **min
 5. **Void distance formula** uses planet centers minus radii minus atmosphere thickness — not tower positions
 
 Want me to start scaffolding the actual code for any of these components?
+
