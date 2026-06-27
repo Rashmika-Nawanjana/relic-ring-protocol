@@ -80,5 +80,6 @@ export type RouteResult =
       total_latency_ms: number;
       hops: HopLogEntry[];
       per_hop_latency: LatencyComponents[];
+      tower_routes: import("./packet-path").PlanetTowerRoute[];
     }
   | { ok: false; error: string };

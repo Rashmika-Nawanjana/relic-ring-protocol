@@ -52,12 +52,12 @@ export function SimulatorApp() {
         <div className="relative min-h-[55vh] flex-1 lg:min-h-full">
           <DynamicCanvas />
           <SceneControls />
-          <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-4 py-3">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-[100] bg-gradient-to-b from-black/70 to-transparent px-4 py-3">
             <h1 className="text-lg font-semibold tracking-tight">
               Relic Ring Protocol
             </h1>
             <p className="text-xs text-zinc-400">
-              Hover planets for specs · click to inspect towers · scroll to zoom
+              Hover planets · left-drag pan · right-drag orbit · scroll zoom
             </p>
           </div>
         </div>

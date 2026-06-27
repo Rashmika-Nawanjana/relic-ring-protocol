@@ -15,6 +15,9 @@ import type { ScenePlanet } from "@/lib/universe/types";
 import { useUniverse } from "@/context/UniverseContext";
 import { PlanetDetailCard } from "@/components/solar-system/PlanetDetailCard";
 
+/** Keep 3D Html labels below the scene UI overlay (SimulatorApp uses z-[100]). */
+const TOWER_LABEL_Z: [number, number] = [30, 0];
+
 type ZetaPlanetProps = {
   planet: ScenePlanet;
   rotationSpeed: number;
@@ -38,6 +41,7 @@ export function ZetaPlanet({
     selectedId,
     hoveredId,
     route,
+    routeResult,
     setSelectedId,
     setHoveredId,
   } = useUniverse();
@@ -54,6 +58,12 @@ export function ZetaPlanet({
     () => towers.map((t) => t.label),
     [towers],
   );
+
+  const activeTowerIndices = useMemo(() => {
+    if (!routeResult?.ok) return new Set<number>();
+    const tr = routeResult.tower_routes.find((r) => r.planetId === node.id);
+    return new Set(tr?.viaTowers ?? []);
+  }, [routeResult, node.id]);
 
   const { map, bumpMap } = useMemo(() => {
     const seed = node.codex * 17 + node.radius_km;
@@ -173,7 +183,9 @@ export function ZetaPlanet({
 
         {/* Relay towers on equator — always visible, enhanced when focused */}
         {showTowers &&
-          towers.map((tower) => (
+          towers.map((tower) => {
+            const onPacketPath = activeTowerIndices.has(tower.index);
+            return (
             <group key={tower.label} position={tower.local}>
               {/* Base pad on surface */}
               <mesh rotation={[Math.PI / 2, 0, 0]}>
@@ -195,9 +207,11 @@ export function ZetaPlanet({
               >
                 <octahedronGeometry args={[towerScale * 0.45, 0]} />
                 <meshStandardMaterial
-                  color={isKilled ? "#6b7280" : "#e0e7ff"}
+                  color={isKilled ? "#6b7280" : onPacketPath ? "#ffffff" : "#e0e7ff"}
                   emissive={isKilled ? "#000" : color}
-                  emissiveIntensity={showTowerDetail ? 1.4 : 0.75}
+                  emissiveIntensity={
+                    onPacketPath ? 2.2 : showTowerDetail ? 1.4 : 0.75
+                  }
                   metalness={0.55}
                   roughness={0.15}
                 />
@@ -211,7 +225,9 @@ export function ZetaPlanet({
                 <meshStandardMaterial
                   color="#cbd5e1"
                   emissive="#818cf8"
-                  emissiveIntensity={showTowerDetail ? 1 : 0.45}
+                  emissiveIntensity={
+                    onPacketPath ? 1.8 : showTowerDetail ? 1 : 0.45
+                  }
                   metalness={0.7}
                   roughness={0.2}
                 />
@@ -222,13 +238,13 @@ export function ZetaPlanet({
                 <sphereGeometry args={[towerScale * 0.12, 12, 12]} />
                 <meshStandardMaterial
                   color="#ffffff"
-                  emissive={color}
-                  emissiveIntensity={showTowerDetail ? 2 : 0.9}
+                  emissive={onPacketPath ? "#ffffff" : color}
+                  emissiveIntensity={onPacketPath ? 3 : showTowerDetail ? 2 : 0.9}
                   toneMapped={false}
                 />
               </mesh>
 
-              {showTowerDetail && (
+              {(showTowerDetail || onPacketPath) && (
                 <>
                   <pointLight
                     color={color}
@@ -241,6 +257,7 @@ export function ZetaPlanet({
                     center
                     distanceFactor={isSelected ? 8 : 11}
                     position={[0, towerScale * 1.65, 0]}
+                    zIndexRange={TOWER_LABEL_Z}
                     style={{ pointerEvents: "none" }}
                   >
                     <span
@@ -257,7 +274,8 @@ export function ZetaPlanet({
                 </>
               )}
             </group>
-          ))}
+            );
+          })}
       </group>
 
       {isFocused && (
@@ -266,7 +284,7 @@ export function ZetaPlanet({
           distanceFactor={isSelected ? 6.5 : 9}
           position={[0, visualRadius + atmosphereRadius * 0.35 + 0.4, 0]}
           style={{ pointerEvents: "none" }}
-          zIndexRange={[100, 0]}
+          zIndexRange={TOWER_LABEL_Z}
         >
           <PlanetDetailCard
             node={node}
@@ -285,6 +303,7 @@ export function ZetaPlanet({
           center
           distanceFactor={12}
           position={[0, visualRadius + 0.35, 0]}
+          zIndexRange={TOWER_LABEL_Z}
           style={{ pointerEvents: "none" }}
         >
           <span className="rounded-full bg-indigo-600/90 px-2 py-0.5 text-[10px] font-semibold text-white shadow-lg">

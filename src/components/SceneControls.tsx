@@ -8,7 +8,7 @@ export function SceneControls() {
 
   return (
     <div
-      className="absolute right-3 top-3 z-10 w-52 rounded-lg border border-zinc-700/80 bg-black/75 p-3 text-xs backdrop-blur-md"
+      className="pointer-events-auto absolute right-3 top-3 z-[100] w-52 rounded-lg border border-zinc-700/80 bg-black/75 p-3 text-xs backdrop-blur-md"
       aria-label="Scene controls"
     >
       <p className="mb-2 font-semibold text-zinc-300">Scene Controls</p>
