@@ -9,6 +9,40 @@ const PLANET_COLORS: Record<string, string> = {
   Caelum: "#c084fc",
 };
 
+/** Extra palette for planets not in PLANET_COLORS — stable pick by id hash. */
+const PLANET_COLOR_PALETTE = [
+  "#f472b6",
+  "#fb923c",
+  "#facc15",
+  "#a3e635",
+  "#2dd4bf",
+  "#22d3ee",
+  "#60a5fa",
+  "#818cf8",
+  "#c084fc",
+  "#e879f9",
+  "#f87171",
+  "#fb7185",
+  "#fdba74",
+  "#86efac",
+  "#67e8f9",
+  "#93c5fd",
+];
+
+function hashPlanetId(id: string): number {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash << 5) - hash + id.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+export function getPlanetColor(id: string): string {
+  if (PLANET_COLORS[id]) return PLANET_COLORS[id];
+  return PLANET_COLOR_PALETTE[hashPlanetId(id) % PLANET_COLOR_PALETTE.length];
+}
+
 /** Map config coordinates to 3D scene units (XZ plane, Y-up). */
 const POSITION_SCALE = 0.021;
 const MIN_ORBIT_FROM_SUN = 4.2;
@@ -100,7 +134,7 @@ export function buildScenePlanets(config: UniverseConfig): ScenePlanet[] {
       position,
       visualRadius: visualR,
       atmosphereRadius: atmosphereR,
-      color: PLANET_COLORS[node.id] ?? "#94a3b8",
+      color: getPlanetColor(node.id),
       towers: buildTowerPositions(node, position, visualR * 1.02),
     };
   });
