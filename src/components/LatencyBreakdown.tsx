@@ -68,10 +68,52 @@ export function LatencyBreakdown() {
       </div>
 
       <div className="mt-4 flex flex-col gap-2.5">
-        <Bar label="Fiber" value={totals.fiber} max={max} color="#6ee7b7" />
-        <Bar label="Tower" value={totals.towers} max={max} color="#fcd34d" />
-        <Bar label="Atmo" value={totals.atmosphere} max={max} color="#7dd3fc" />
-        <Bar label="Void" value={totals.void} max={max} color="#a5b4fc" />
+        <Bar label="Fiber" value={totals.fiber} max={max} color="#a8a29e" />
+        <Bar label="Tower" value={totals.towers} max={max} color="#d4a574" />
+        <Bar label="Atmo" value={totals.atmosphere} max={max} color="#94a3b8" />
+        <Bar label="Void" value={totals.void} max={max} color="#cbd5e1" />
+      </div>
+
+      <div className="mt-4 overflow-x-auto rounded-md border border-white/5">
+        <table className="w-full min-w-[20rem] text-left text-[10px]">
+          <thead>
+            <tr className="border-b border-white/5 text-zinc-600">
+              <th className="px-2 py-1.5 font-medium">Hop</th>
+              <th className="px-2 py-1.5 font-medium text-right">Fiber</th>
+              <th className="px-2 py-1.5 font-medium text-right">Tower</th>
+              <th className="px-2 py-1.5 font-medium text-right">Atmo</th>
+              <th className="px-2 py-1.5 font-medium text-right">Void</th>
+              <th className="px-2 py-1.5 font-medium text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {routeResult.per_hop_latency.map((hop, i) => (
+              <tr
+                key={`${hop.label}-${i}`}
+                className="border-b border-white/[0.03] text-zinc-400"
+              >
+                <td className="px-2 py-1.5 font-mono text-zinc-300">
+                  {hop.label}
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono">
+                  {hop.fiber_ms > 0 ? hop.fiber_ms.toFixed(1) : "—"}
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono">
+                  {hop.towers_ms > 0 ? hop.towers_ms.toFixed(1) : "—"}
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono">
+                  {hop.atmosphere_ms > 0 ? hop.atmosphere_ms.toFixed(1) : "—"}
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono">
+                  {hop.void_ms > 0 ? hop.void_ms.toFixed(1) : "—"}
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono text-zinc-200">
+                  {hop.total_ms.toFixed(1)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );

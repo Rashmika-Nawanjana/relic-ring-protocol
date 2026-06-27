@@ -13,10 +13,7 @@ import {
   sampleAlongPath,
   towerTipWorld,
 } from "@/lib/universe/packet-path";
-
-function edgeKey(a: string, b: string) {
-  return [a, b].sort().join("-");
-}
+import { voidEdgeKey } from "@/lib/universe/router";
 
 export function VoidLinks() {
   const {
@@ -24,6 +21,7 @@ export function VoidLinks() {
     edges,
     route,
     killed,
+    killedLinks,
     config,
     selectedId,
     hoveredId,
@@ -38,7 +36,7 @@ export function VoidLinks() {
   const routeSegments = useMemo(() => {
     const segs = new Set<string>();
     for (let i = 0; i < route.length - 1; i++) {
-      segs.add(edgeKey(route[i], route[i + 1]));
+      segs.add(voidEdgeKey(route[i], route[i + 1]));
     }
     return segs;
   }, [route]);
@@ -50,7 +48,7 @@ export function VoidLinks() {
         const b = planetMap.get(edge.to);
         if (!a || !b) return null;
 
-        const key = edgeKey(edge.from, edge.to);
+        const key = edge.key;
         const start = new THREE.Vector3(...a.position);
         const end = new THREE.Vector3(...b.position);
         const dir = end.clone().sub(start).normalize();
@@ -61,19 +59,20 @@ export function VoidLinks() {
           key,
           points: [start.toArray(), end.toArray()] as [number, number, number][],
           isActive: routeSegments.has(key),
-          isValid:
-            edge.valid && !killed.has(edge.from) && !killed.has(edge.to),
-          invalid: edge.voidDistanceKm > 0 && !edge.valid,
+          isSevered: killedLinks.has(key),
+          isValid: edge.valid,
+          invalid: edge.voidDistanceKm > 0 && !edge.valid && !killedLinks.has(key),
         };
       })
       .filter(Boolean) as {
       key: string;
       points: [number, number, number][];
       isActive: boolean;
+      isSevered: boolean;
       isValid: boolean;
       invalid: boolean;
     }[];
-  }, [edges, planetMap, routeSegments, killed]);
+  }, [edges, planetMap, routeSegments, killed, killedLinks]);
 
   const hasRoute = route.length >= 2;
   const showPaths = sceneSettings.showTowerPaths;
@@ -88,15 +87,25 @@ export function VoidLinks() {
             color={
               line.isActive
                 ? "#818cf8"
-                : line.isValid
-                  ? "#334155"
-                  : line.invalid
-                    ? "#7f1d1d"
-                    : "#1e293b"
+                : line.isSevered
+                  ? "#3f3f46"
+                  : line.isValid
+                    ? "#334155"
+                    : line.invalid
+                      ? "#7f1d1d"
+                      : "#1e293b"
             }
             lineWidth={line.isActive ? 2 : 1}
             transparent
-            opacity={line.isActive ? 0.35 : line.isValid ? 0.4 : 0.15}
+            opacity={
+              line.isSevered
+                ? 0.08
+                : line.isActive
+                  ? 0.35
+                  : line.isValid
+                    ? 0.4
+                    : 0.15
+            }
           />
         ))}
 
@@ -192,7 +201,7 @@ function ActiveRouteVisuals({
           const from = planetMap.get(route[i]);
           const to = planetMap.get(route[i + 1]);
           if (!from || !to) return null;
-          const key = edgeKey(route[i], route[i + 1]);
+          const key = voidEdgeKey(route[i], route[i + 1]);
           return (
             <VoidHopLine
               key={key}

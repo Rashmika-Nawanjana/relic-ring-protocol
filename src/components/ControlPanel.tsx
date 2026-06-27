@@ -1,23 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useUniverse } from "@/context/UniverseContext";
+import { listValidVoidLinks } from "@/lib/universe/router";
 
 export function ControlPanel() {
   const {
     config,
     killed,
+    killedLinks,
     selectedId,
     isSending,
     routeResult,
     sendPacket,
     toggleKill,
+    toggleKillLink,
   } = useUniverse();
 
   const nodeIds = config.nodes.map((n) => n.id);
+  const voidLinks = useMemo(() => listValidVoidLinks(config), [config]);
   const [origin, setOrigin] = useState("Aegis");
   const [destination, setDestination] = useState("Caelum");
   const [message, setMessage] = useState("Hello world");
+  const [linkKey, setLinkKey] = useState(voidLinks[0]?.key ?? "");
 
   return (
     <section className="panel-section" aria-label="Network controls">
@@ -111,9 +116,38 @@ export function ControlPanel() {
         </button>
         {killed.size > 0 && (
           <p className="mt-2 text-xs text-zinc-500">
-            Offline: {[...killed].join(", ")}
+            Offline nodes: {[...killed].join(", ")}
           </p>
         )}
+
+        <div className="mt-4">
+          <span className="field-label">Void link (M4 chaos)</span>
+          <select
+            value={linkKey}
+            onChange={(e) => setLinkKey(e.target.value)}
+            className="field-input"
+          >
+            {voidLinks.map((link) => (
+              <option key={link.key} value={link.key}>
+                {link.from} ↔ {link.to}
+                {killedLinks.has(link.key) ? " · severed" : ""}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => linkKey && toggleKillLink(linkKey)}
+            disabled={!linkKey}
+            className="mt-2 min-h-9 w-full rounded-lg border border-white/8 px-3 py-2 text-sm text-zinc-400 transition hover:border-white/12 hover:bg-white/[0.04] hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            {killedLinks.has(linkKey) ? "Restore void link" : "Sever void link"}
+          </button>
+          {killedLinks.size > 0 && (
+            <p className="mt-2 text-xs text-zinc-500">
+              Severed links: {[...killedLinks].join(", ")}
+            </p>
+          )}
+        </div>
       </div>
     </section>
   );

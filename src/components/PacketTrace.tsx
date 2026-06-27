@@ -23,10 +23,33 @@ export function PacketTrace() {
   }
 
   const asciiBytes = [...routeResult.message].map((ch) => ch.charCodeAt(0));
+  const packet = routeResult.packet;
 
   return (
     <section className="panel-section" aria-label="Packet trace">
       <h2 className="text-base font-medium text-zinc-100">Packet trace</h2>
+
+      <div className="mt-3 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2.5">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+          Packet schema
+        </p>
+        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
+          <dt className="text-zinc-600">origin_id</dt>
+          <dd className="font-mono text-zinc-300">{packet.origin_id}</dd>
+          <dt className="text-zinc-600">destination_id</dt>
+          <dd className="font-mono text-zinc-300">{packet.destination_id}</dd>
+          <dt className="text-zinc-600">current_id</dt>
+          <dd className="font-mono text-zinc-300">{packet.current_id}</dd>
+          <dt className="text-zinc-600">hop_log</dt>
+          <dd className="font-mono text-zinc-400">
+            {packet.hop_log.length} events
+          </dd>
+        </dl>
+        <p className="mt-2 text-[10px] font-medium text-zinc-600">payload</p>
+        <pre className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap break-all font-mono text-[10px] text-zinc-500">
+          {packet.payload}
+        </pre>
+      </div>
 
       <div className="mt-3 space-y-3">
         <div className="rounded-md bg-white/[0.03] px-3 py-2">

@@ -4,7 +4,13 @@ import { findRoute } from "@/lib/universe/router";
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { origin, destination, message = "Hello world", killed = [] } = body;
+  const {
+    origin,
+    destination,
+    message = "Hello world",
+    killed = [],
+    killed_links = [],
+  } = body;
 
   if (!origin || !destination) {
     return NextResponse.json(
@@ -20,6 +26,7 @@ export async function POST(request: Request) {
     destination,
     new Set(killed as string[]),
     message,
+    new Set(killed_links as string[]),
   );
 
   return NextResponse.json(result, { status: result.ok ? 200 : 422 });

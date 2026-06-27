@@ -54,6 +54,8 @@ export type LatencyComponents = {
   total_ms: number;
 };
 
+export type LabeledLatency = LatencyComponents & { label: string };
+
 export type HopLogEntry = {
   planet: string;
   tower: string;
@@ -81,7 +83,8 @@ export type RouteResult =
       route: string[];
       total_latency_ms: number;
       hops: HopLogEntry[];
-      per_hop_latency: LatencyComponents[];
+      per_hop_latency: LabeledLatency[];
       tower_routes: import("./packet-path").PlanetTowerRoute[];
+      packet: Packet;
     }
   | { ok: false; error: string };

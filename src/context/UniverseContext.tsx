@@ -31,6 +31,7 @@ type UniverseContextValue = {
   planets: ScenePlanet[];
   edges: ReturnType<typeof buildVoidEdges>;
   killed: Set<string>;
+  killedLinks: Set<string>;
   selectedId: string | null;
   hoveredId: string | null;
   route: string[];
@@ -44,6 +45,7 @@ type UniverseContextValue = {
   setSelectedId: (id: string | null) => void;
   setHoveredId: (id: string | null) => void;
   toggleKill: (id: string) => void;
+  toggleKillLink: (key: string) => void;
   sendPacket: (origin: string, destination: string, message: string) => Promise<void>;
 };
 
@@ -62,6 +64,7 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
   const config = useMemo(() => loadUniverseConfig(), []);
   const planets = useMemo(() => buildScenePlanets(config), [config]);
   const [killed, setKilled] = useState<Set<string>>(new Set());
+  const [killedLinks, setKilledLinks] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [route, setRoute] = useState<string[]>([]);
@@ -72,8 +75,8 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
   const [resetViewTick, setResetViewTick] = useState(0);
 
   const edges = useMemo(
-    () => buildVoidEdges(config, killed),
-    [config, killed],
+    () => buildVoidEdges(config, killed, killedLinks),
+    [config, killed, killedLinks],
   );
 
   const setSceneSettings = useCallback((patch: Partial<SceneSettings>) => {
@@ -85,28 +88,55 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
     setResetViewTick((n) => n + 1);
   }, []);
 
-  const toggleKill = useCallback((id: string) => {
-    setKilled((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const clearRoute = useCallback(() => {
     setRoute([]);
     setRouteResult(null);
   }, []);
+
+  const toggleKill = useCallback(
+    (id: string) => {
+      setKilled((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      clearRoute();
+    },
+    [clearRoute],
+  );
+
+  const toggleKillLink = useCallback(
+    (key: string) => {
+      setKilledLinks((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+      clearRoute();
+    },
+    [clearRoute],
+  );
 
   const sendPacket = useCallback(
     async (origin: string, destination: string, message: string) => {
       setIsSending(true);
       await new Promise((r) => setTimeout(r, 400));
-      const result = findRoute(config, origin, destination, killed, message);
+      const result = findRoute(
+        config,
+        origin,
+        destination,
+        killed,
+        message,
+        killedLinks,
+      );
       setRouteResult(result);
       setRoute(result.ok ? result.route : []);
       if (result.ok) setPacketTransmitKey((k) => k + 1);
       setIsSending(false);
     },
-    [config, killed],
+    [config, killed, killedLinks],
   );
 
   return (
@@ -116,6 +146,7 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
         planets,
         edges,
         killed,
+        killedLinks,
         selectedId,
         hoveredId,
         route,
@@ -129,6 +160,7 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
         setSelectedId,
         setHoveredId,
         toggleKill,
+        toggleKillLink,
         sendPacket,
       }}
     >
