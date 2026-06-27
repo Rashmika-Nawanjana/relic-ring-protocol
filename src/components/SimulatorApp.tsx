@@ -52,6 +52,11 @@ export function SimulatorApp() {
         <div className="relative min-h-[58vh] flex-1 lg:min-h-full">
           <DynamicCanvas />
           <SceneControls />
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-[90] bg-gradient-to-b from-black/55 to-transparent px-4 pb-8 pt-3 pl-48 lg:pl-52">
+            <p className="text-[11px] text-zinc-500">
+              Hover planets · left-drag pan · right-drag orbit · scroll zoom
+            </p>
+          </div>
           <PacketLiveFeed />
         </div>
 
