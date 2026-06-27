@@ -6,6 +6,7 @@ import type {
   UniverseConfig,
 } from "./types";
 import { voidDistanceKm } from "./geometry";
+import { buildPlanetTowerRoutes } from "./packet-path";
 import { crustTransitTimeMs, voidTravelTimeMs } from "./physics";
 import { encodePayloadAscii } from "./codec";
 
@@ -108,6 +109,7 @@ export function findRoute(
 
   const meta = config.universe_metadata;
   const nodeMap = new Map(config.nodes.map((n) => [n.id, n]));
+  const towerRoutes = buildPlanetTowerRoutes(route, nodeMap, meta.coordinate_scale_unit_km);
   const hops: HopLogEntry[] = [];
   const perHop: LatencyComponents[] = [];
   let total = 0;
@@ -115,7 +117,8 @@ export function findRoute(
   for (let i = 0; i < route.length; i++) {
     const planetId = route[i];
     const planet = nodeMap.get(planetId)!;
-    const internal = crustTransitTimeMs(planet, meta, 1);
+    const tr = towerRoutes[i];
+    const internal = crustTransitTimeMs(planet, meta, tr.segments);
     perHop.push(internal);
     total += internal.total_ms;
 
@@ -124,14 +127,25 @@ export function findRoute(
       ? encodePayloadAscii(message, nodeMap.get(nextPlanet)!.codex)
       : encodePayloadAscii(message, planet.codex);
 
-    hops.push({
-      planet: planetId,
-      tower: `T_${Math.floor(planet.active_towers / 2)}`,
-      action: i === route.length - 1 ? "receive" : "send",
-      latency_ms: internal.total_ms,
-      encoding,
-      components: internal,
-    });
+    for (let t = 0; t < tr.viaTowers.length; t++) {
+      const towerIdx = tr.viaTowers[t];
+      const isLastTower = t === tr.viaTowers.length - 1;
+      const isFinalPlanet = i === route.length - 1;
+
+      let action: HopLogEntry["action"];
+      if (isFinalPlanet && isLastTower) action = "receive";
+      else if (!isFinalPlanet && isLastTower) action = "send";
+      else action = "transit";
+
+      hops.push({
+        planet: planetId,
+        tower: `T_${towerIdx}`,
+        action,
+        latency_ms: t === 0 ? internal.total_ms : 0,
+        encoding: isLastTower ? encoding : undefined,
+        components: t === 0 ? internal : undefined,
+      });
+    }
 
     if (nextPlanet) {
       const next = nodeMap.get(nextPlanet)!;
@@ -154,6 +168,7 @@ export function findRoute(
     total_latency_ms: total,
     hops,
     per_hop_latency: perHop,
+    tower_routes: towerRoutes,
   };
 }
 

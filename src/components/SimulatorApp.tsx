@@ -31,7 +31,7 @@ function CanvasWrapper() {
     <Canvas
       shadows
       dpr={[1, 2]}
-      camera={{ position: [-22, 14, 18], fov: 45, near: 0.1, far: 300 }}
+      camera={{ position: [-32, 20, 26], fov: 42, near: 0.1, far: 400 }}
       gl={{
         antialias: true,
         alpha: false,
@@ -52,18 +52,18 @@ export function SimulatorApp() {
         <div className="relative min-h-[55vh] flex-1 lg:min-h-full">
           <DynamicCanvas />
           <SceneControls />
-          <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-4 py-3">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-[100] bg-gradient-to-b from-black/70 to-transparent px-4 py-3">
             <h1 className="text-lg font-semibold tracking-tight">
               Relic Ring Protocol
             </h1>
             <p className="text-xs text-zinc-400">
-              Drag to orbit · scroll to zoom · right-drag to pan · Reset view if lost
+              Hover planets · left-drag pan · right-drag orbit · scroll zoom
             </p>
           </div>
         </div>
 
-        {/* Side panel */}
-        <div className="flex max-h-[50vh] flex-col gap-3 overflow-y-auto border-t border-zinc-800 bg-zinc-950/95 p-3 lg:max-h-full lg:w-96 lg:border-t-0 lg:border-l">
+        {/* Side panel — narrower so the 3D view dominates */}
+        <div className="flex max-h-[45vh] flex-col gap-3 overflow-y-auto border-t border-zinc-800/80 bg-zinc-950/90 p-3 backdrop-blur-sm lg:max-h-full lg:w-80 lg:border-t-0 lg:border-l">
           <ControlPanel />
           <PacketTrace />
           <LatencyBreakdown />

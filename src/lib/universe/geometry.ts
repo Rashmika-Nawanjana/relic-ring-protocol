@@ -10,12 +10,14 @@ const PLANET_COLORS: Record<string, string> = {
 };
 
 /** Map config coordinates to 3D scene units (XZ plane, Y-up). */
-const POSITION_SCALE = 0.018;
-const RADIUS_SCALE = 0.00035;
-const MIN_ORBIT_FROM_SUN = 2.8;
+const POSITION_SCALE = 0.021;
+const MIN_ORBIT_FROM_SUN = 4.2;
 
+/** Visual-only sizing — does not affect physics/routing math. */
 export function visualRadius(radiusKm: number): number {
-  return Math.max(0.15, Math.pow(radiusKm, 0.45) * RADIUS_SCALE);
+  const earthRef = 6371;
+  const normalized = radiusKm / earthRef;
+  return Math.max(0.5, Math.pow(normalized, 0.32) * 0.9);
 }
 
 export function planetOrbitRadius(node: PlanetNode): number {
@@ -106,4 +108,85 @@ export function buildScenePlanets(config: UniverseConfig): ScenePlanet[] {
 
 export function getPlanetById(config: UniverseConfig, id: string): PlanetNode | undefined {
   return config.nodes.find((n) => n.id === id);
+}
+
+/** Tower center in km on the 2D universe grid (clockwise from +y). */
+export function towerKmPosition(
+  planet: PlanetNode,
+  towerIndex: number,
+  scale: number,
+): [number, number] {
+  const cx = planet.x * scale;
+  const cy = planet.y * scale;
+  const angle = towerAngleRad(towerIndex, planet.active_towers);
+  const r = planet.radius_km;
+  return [cx + Math.sin(angle) * r, cy + Math.cos(angle) * r];
+}
+
+/** Closest tower pair for a void hop (send on `from`, receive on `to`). */
+export function closestTowerPair(
+  from: PlanetNode,
+  to: PlanetNode,
+  scale: number,
+): { sendIdx: number; recvIdx: number } {
+  let best = Infinity;
+  let sendIdx = 0;
+  let recvIdx = 0;
+
+  for (let i = 0; i < from.active_towers; i++) {
+    for (let j = 0; j < to.active_towers; j++) {
+      const [ax, ay] = towerKmPosition(from, i, scale);
+      const [bx, by] = towerKmPosition(to, j, scale);
+      const d = Math.hypot(bx - ax, by - ay);
+      if (d < best) {
+        best = d;
+        sendIdx = i;
+        recvIdx = j;
+      }
+    }
+  }
+
+  return { sendIdx, recvIdx };
+}
+
+/** Fiber ring segments between entry and exit towers (shortest arc). */
+export function fiberSegmentCount(
+  entryTower: number,
+  exitTower: number,
+  totalTowers: number,
+): number {
+  if (entryTower === exitTower) return 0;
+  const cw = (exitTower - entryTower + totalTowers) % totalTowers;
+  const ccw = (entryTower - exitTower + totalTowers) % totalTowers;
+  return Math.min(cw, ccw);
+}
+
+/** Tower indices visited along the shortest fiber arc (inclusive). */
+export function towerIndicesOnFiberArc(
+  entryTower: number,
+  exitTower: number,
+  totalTowers: number,
+): number[] {
+  if (entryTower === exitTower) return [entryTower];
+
+  const cw = (exitTower - entryTower + totalTowers) % totalTowers;
+  const ccw = (entryTower - exitTower + totalTowers) % totalTowers;
+  const indices: number[] = [];
+  let cur = entryTower;
+
+  if (cw <= ccw) {
+    while (true) {
+      indices.push(cur);
+      if (cur === exitTower) break;
+      cur = (cur + 1) % totalTowers;
+    }
+  } else {
+    while (true) {
+      indices.push(cur);
+      if (cur === exitTower) break;
+      cur = (cur - 1 + totalTowers) % totalTowers;
+    }
+  }
+
+  return indices;
 }
