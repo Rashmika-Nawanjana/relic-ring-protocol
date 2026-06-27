@@ -3,6 +3,7 @@ import type { PlanetNode, ScenePlanet, UniverseConfig } from "./types";
 import {
   closestTowerPair,
   fiberSegmentCount,
+  towerAngleRad,
   towerIndicesOnFiberArc,
 } from "./geometry";
 
@@ -16,22 +17,98 @@ export type PlanetTowerRoute = {
 
 export type PacketPathPoint = [number, number, number];
 
-function towerEquatorPoint(planet: ScenePlanet, towerIdx: number): THREE.Vector3 {
-  const t = planet.towers[towerIdx];
-  return new THREE.Vector3(
-    planet.position[0] + t.local[0],
-    planet.position[1] + t.local[1],
-    planet.position[2] + t.local[2],
-  );
+export function towerTipHeight(planet: ScenePlanet): number {
+  return planet.visualRadius * 0.16 * 1.35;
 }
 
-function towerAtmospherePoint(planet: ScenePlanet, towerIdx: number): THREE.Vector3 {
-  const equator = towerEquatorPoint(planet, towerIdx);
+export function towerRingRadius(planet: ScenePlanet): number {
+  return planet.visualRadius * 1.02;
+}
+
+/** Beacon tip in planet-local space (inside the spinning group). */
+export function towerTipLocal(
+  planet: ScenePlanet,
+  towerIdx: number,
+): [number, number, number] {
+  const t = planet.towers[towerIdx];
+  const tipY = towerTipHeight(planet);
+  return [t.local[0], t.local[1] + tipY, t.local[2]];
+}
+
+function ringPointLocal(
+  planet: ScenePlanet,
+  towerIndex: number,
+  tipY: number,
+): [number, number, number] {
+  const N = planet.node.active_towers;
+  const angle = towerAngleRad(towerIndex, N);
+  const r = towerRingRadius(planet);
+  return [Math.sin(angle) * r, tipY, Math.cos(angle) * r];
+}
+
+/** Smooth fiber-arc samples along the equatorial ring at tower beacon height. */
+export function fiberArcLocalPoints(
+  planet: ScenePlanet,
+  viaTowers: number[],
+  samplesPerSegment = 5,
+): [number, number, number][] {
+  if (viaTowers.length === 0) return [];
+  if (viaTowers.length === 1) return [towerTipLocal(planet, viaTowers[0])];
+
+  const N = planet.node.active_towers;
+  const tipY = towerTipHeight(planet);
+  const points: [number, number, number][] = [];
+
+  for (let i = 0; i < viaTowers.length - 1; i++) {
+    const from = viaTowers[i];
+    const to = viaTowers[i + 1];
+    const cw = (to - from + N) % N;
+    const ccw = (from - to + N) % N;
+    const useCw = cw <= ccw;
+    const segCount = useCw ? cw : ccw;
+    const steps = Math.max(segCount * samplesPerSegment, 1);
+
+    for (let s = 0; s < steps; s++) {
+      const t = s / steps;
+      const frac =
+        useCw ? from + t * segCount : from - t * segCount;
+      points.push(ringPointLocal(planet, frac, tipY));
+    }
+  }
+
+  points.push(towerTipLocal(planet, viaTowers[viaTowers.length - 1]));
+  return points;
+}
+
+function localToWorld(
+  planet: ScenePlanet,
+  local: [number, number, number],
+  spinY: number,
+): THREE.Vector3 {
+  const v = new THREE.Vector3(...local);
+  v.applyAxisAngle(new THREE.Vector3(0, 1, 0), spinY);
+  return v.add(new THREE.Vector3(...planet.position));
+}
+
+export function towerTipWorld(
+  planet: ScenePlanet,
+  towerIdx: number,
+  spinY: number,
+): THREE.Vector3 {
+  return localToWorld(planet, towerTipLocal(planet, towerIdx), spinY);
+}
+
+function towerAtmosphereWorld(
+  planet: ScenePlanet,
+  towerIdx: number,
+  spinY: number,
+): THREE.Vector3 {
+  const tip = towerTipWorld(planet, towerIdx, spinY);
   const center = new THREE.Vector3(...planet.position);
-  const radial = equator.clone().sub(center);
+  const radial = tip.clone().sub(center);
   if (radial.lengthSq() < 1e-8) radial.set(0, 1, 0);
   radial.normalize();
-  return center.add(radial.multiplyScalar(planet.atmosphereRadius));
+  return center.clone().add(radial.multiplyScalar(planet.atmosphereRadius));
 }
 
 export function buildPlanetTowerRoutes(
@@ -79,12 +156,13 @@ export function buildPlanetTowerRoutes(
   return result;
 }
 
-/** World-space polyline: equatorial fiber arcs, atmosphere exits, and void hops. */
-export function buildPacketPathWaypoints(
+/** World-space path that tracks spinning planets and tower beacon tips. */
+export function buildAnimatedPacketPath(
   planets: ScenePlanet[],
   route: string[],
   config: UniverseConfig,
-): PacketPathPoint[] {
+  spinByPlanetId: Map<string, number>,
+): THREE.Vector3[] {
   if (route.length < 2) return [];
 
   const planetMap = new Map(planets.map((p) => [p.node.id, p]));
@@ -98,14 +176,17 @@ export function buildPacketPathWaypoints(
     const planet = planetMap.get(tr.planetId);
     if (!planet) continue;
 
+    const spinY = spinByPlanetId.get(tr.planetId) ?? 0;
+
     if (i > 0) {
-      points.push(towerAtmospherePoint(planet, tr.entryTower));
-      points.push(towerEquatorPoint(planet, tr.entryTower));
+      points.push(towerAtmosphereWorld(planet, tr.entryTower, spinY));
+      points.push(towerTipWorld(planet, tr.entryTower, spinY));
     }
 
+    const fiberLocal = fiberArcLocalPoints(planet, tr.viaTowers);
     const arcStart = i > 0 ? 1 : 0;
-    for (let j = arcStart; j < tr.viaTowers.length; j++) {
-      points.push(towerEquatorPoint(planet, tr.viaTowers[j]));
+    for (let j = arcStart; j < fiberLocal.length; j++) {
+      points.push(localToWorld(planet, fiberLocal[j], spinY));
     }
 
     if (i < route.length - 1) {
@@ -113,22 +194,37 @@ export function buildPacketPathWaypoints(
       const nextTr = towerRoutes[i + 1];
       if (!nextPlanet) continue;
 
-      points.push(towerAtmospherePoint(planet, tr.exitTower));
-      points.push(towerAtmospherePoint(nextPlanet, nextTr.entryTower));
+      const nextSpin = spinByPlanetId.get(nextTr.planetId) ?? 0;
+      points.push(towerAtmosphereWorld(planet, tr.exitTower, spinY));
+      points.push(
+        towerAtmosphereWorld(nextPlanet, nextTr.entryTower, nextSpin),
+      );
     }
   }
 
-  return points.map((p) => p.toArray() as PacketPathPoint);
+  return points;
+}
+
+export function pathLength(waypoints: THREE.Vector3[]): number {
+  let total = 0;
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    total += waypoints[i].distanceTo(waypoints[i + 1]);
+  }
+  return total;
 }
 
 export function sampleAlongPath(
-  waypoints: PacketPathPoint[],
+  waypoints: THREE.Vector3[] | PacketPathPoint[],
   progress: number,
 ): THREE.Vector3 {
   if (waypoints.length === 0) return new THREE.Vector3();
-  if (waypoints.length === 1) return new THREE.Vector3(...waypoints[0]);
+  const pts =
+    waypoints[0] instanceof THREE.Vector3
+      ? (waypoints as THREE.Vector3[])
+      : (waypoints as PacketPathPoint[]).map((w) => new THREE.Vector3(...w));
 
-  const pts = waypoints.map((w) => new THREE.Vector3(...w));
+  if (pts.length === 1) return pts[0].clone();
+
   const lengths: number[] = [];
   let total = 0;
   for (let i = 0; i < pts.length - 1; i++) {
@@ -149,4 +245,16 @@ export function sampleAlongPath(
   }
 
   return pts[pts.length - 1].clone();
+}
+
+/** @deprecated Use buildAnimatedPacketPath in useFrame */
+export function buildPacketPathWaypoints(
+  planets: ScenePlanet[],
+  route: string[],
+  config: UniverseConfig,
+): PacketPathPoint[] {
+  const spin = new Map(planets.map((p) => [p.node.id, 0]));
+  return buildAnimatedPacketPath(planets, route, config, spin).map(
+    (p) => p.toArray() as PacketPathPoint,
+  );
 }

@@ -64,7 +64,7 @@ export function SceneControls() {
         Orbit paths
       </label>
 
-      <label className="flex items-center gap-2 text-zinc-400">
+      <label className="mb-1 flex items-center gap-2 text-zinc-400">
         <input
           type="checkbox"
           checked={sceneSettings.showTowers}
@@ -72,6 +72,18 @@ export function SceneControls() {
           className="rounded"
         />
         Tower markers
+      </label>
+
+      <label className="flex items-center gap-2 text-zinc-400">
+        <input
+          type="checkbox"
+          checked={sceneSettings.showTowerPaths}
+          onChange={(e) =>
+            setSceneSettings({ showTowerPaths: e.target.checked })
+          }
+          className="rounded"
+        />
+        Tower paths
       </label>
     </div>
   );

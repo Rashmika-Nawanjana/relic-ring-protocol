@@ -11,9 +11,11 @@ import {
   createPlanetTexture,
 } from "@/lib/solar-system/textures";
 import { planetOrbitRadius } from "@/lib/universe/geometry";
+import { planetSpinY } from "@/lib/solar-system/spin";
 import type { ScenePlanet } from "@/lib/universe/types";
 import { useUniverse } from "@/context/UniverseContext";
 import { PlanetDetailCard } from "@/components/solar-system/PlanetDetailCard";
+import { PlanetPacketFiber } from "@/components/solar-system/PlanetPacketFiber";
 
 /** Keep 3D Html labels below the scene UI overlay (SimulatorApp uses z-[100]). */
 const TOWER_LABEL_Z: [number, number] = [30, 0];
@@ -44,6 +46,7 @@ export function ZetaPlanet({
     routeResult,
     setSelectedId,
     setHoveredId,
+    sceneSettings,
   } = useUniverse();
 
   const isKilled = killed.has(node.id);
@@ -63,6 +66,12 @@ export function ZetaPlanet({
     if (!routeResult?.ok) return new Set<number>();
     const tr = routeResult.tower_routes.find((r) => r.planetId === node.id);
     return new Set(tr?.viaTowers ?? []);
+  }, [routeResult, node.id]);
+
+  const routeViaTowers = useMemo(() => {
+    if (!routeResult?.ok) return [];
+    const tr = routeResult.tower_routes.find((r) => r.planetId === node.id);
+    return tr?.viaTowers ?? [];
   }, [routeResult, node.id]);
 
   const { map, bumpMap } = useMemo(() => {
@@ -89,8 +98,11 @@ export function ZetaPlanet({
 
   useFrame(({ clock }) => {
     if (!spinRef.current || isKilled) return;
-    const speed = isFocused ? 0.015 : 0.05;
-    spinRef.current.rotation.y = clock.elapsedTime * speed * rotationSpeed;
+    spinRef.current.rotation.y = planetSpinY(
+      clock.elapsedTime,
+      rotationSpeed,
+      isFocused,
+    );
   });
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -100,7 +112,8 @@ export function ZetaPlanet({
 
   const outlined = (isFocused || onRoute) && !isKilled;
   const towerScale = visualRadius * 0.16;
-  const showTowerDetail = showTowers && (isFocused || onRoute);
+  const showTowerLabels = showTowers;
+  const showTowerHighlight = showTowers && (isFocused || onRoute);
 
   return (
     <group position={position}>
@@ -167,19 +180,29 @@ export function ZetaPlanet({
           )}
         </mesh>
 
-        {/* Subsurface fiber equator — brighter when focused */}
+        {/* Subsurface fiber equator — brighter when focused or on route */}
         <mesh rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[visualRadius * 1.012, visualRadius * 0.028, 12, 128]} />
           <meshStandardMaterial
-            color={isFocused ? "#a5b4fc" : "#64748b"}
-            emissive={isFocused ? "#6366f1" : "#334155"}
-            emissiveIntensity={isFocused ? 1.2 : 0.35}
+            color={onRoute ? "#c7d2fe" : isFocused ? "#a5b4fc" : "#64748b"}
+            emissive={onRoute ? "#818cf8" : isFocused ? "#6366f1" : "#334155"}
+            emissiveIntensity={onRoute ? 1.8 : isFocused ? 1.2 : 0.35}
             metalness={0.6}
             roughness={0.25}
             transparent
             opacity={isKilled ? 0.2 : 0.85}
           />
         </mesh>
+
+        {onRoute &&
+          routeViaTowers.length >= 2 &&
+          sceneSettings.showTowerPaths && (
+          <PlanetPacketFiber
+            planet={planet}
+            viaTowers={routeViaTowers}
+            color={color}
+          />
+        )}
 
         {/* Relay towers on equator — always visible, enhanced when focused */}
         {showTowers &&
@@ -210,7 +233,7 @@ export function ZetaPlanet({
                   color={isKilled ? "#6b7280" : onPacketPath ? "#ffffff" : "#e0e7ff"}
                   emissive={isKilled ? "#000" : color}
                   emissiveIntensity={
-                    onPacketPath ? 2.2 : showTowerDetail ? 1.4 : 0.75
+                    onPacketPath ? 2.2 : showTowerHighlight ? 1.4 : 0.75
                   }
                   metalness={0.55}
                   roughness={0.15}
@@ -226,7 +249,7 @@ export function ZetaPlanet({
                   color="#cbd5e1"
                   emissive="#818cf8"
                   emissiveIntensity={
-                    onPacketPath ? 1.8 : showTowerDetail ? 1 : 0.45
+                    onPacketPath ? 1.8 : showTowerHighlight ? 1 : 0.45
                   }
                   metalness={0.7}
                   roughness={0.2}
@@ -239,20 +262,22 @@ export function ZetaPlanet({
                 <meshStandardMaterial
                   color="#ffffff"
                   emissive={onPacketPath ? "#ffffff" : color}
-                  emissiveIntensity={onPacketPath ? 3 : showTowerDetail ? 2 : 0.9}
+                  emissiveIntensity={onPacketPath ? 3 : showTowerHighlight ? 2 : 0.9}
                   toneMapped={false}
                 />
               </mesh>
 
-              {(showTowerDetail || onPacketPath) && (
+              {(showTowerLabels || onPacketPath) && (
                 <>
-                  <pointLight
-                    color={color}
-                    intensity={0.35}
-                    distance={visualRadius * 3}
-                    decay={2}
-                    position={[0, towerScale * 1.2, 0]}
-                  />
+                  {showTowerHighlight && (
+                    <pointLight
+                      color={color}
+                      intensity={0.35}
+                      distance={visualRadius * 3}
+                      decay={2}
+                      position={[0, towerScale * 1.2, 0]}
+                    />
+                  )}
                   <Html
                     center
                     distanceFactor={isSelected ? 8 : 11}

@@ -23,6 +23,7 @@ export type SceneSettings = {
   rotationSpeed: number;
   showOrbits: boolean;
   showTowers: boolean;
+  showTowerPaths: boolean;
 };
 
 type UniverseContextValue = {
@@ -53,6 +54,7 @@ const DEFAULT_SCENE: SceneSettings = {
   rotationSpeed: 1,
   showOrbits: true,
   showTowers: true,
+  showTowerPaths: true,
 };
 
 export function UniverseProvider({ children }: { children: ReactNode }) {
