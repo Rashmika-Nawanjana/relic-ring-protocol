@@ -5,6 +5,8 @@ export type PacketLegPhase = "idle" | "fiber" | "void" | "tower" | "delivered";
 export type PacketLiveSnapshot = {
   phase: PacketLegPhase;
   progress: number;
+  legIndex: number;
+  legProgress: number;
   hopIndex: number;
   planet: string | null;
   tower: string | null;
@@ -24,6 +26,8 @@ export function packetLegAtProgress(
     return {
       phase: "idle",
       progress: 0,
+      legIndex: 0,
+      legProgress: 0,
       hopIndex: 0,
       planet: null,
       tower: null,
@@ -36,8 +40,10 @@ export function packetLegAtProgress(
   const loop = progress % 1;
   const legs = route.length - 1;
   const t = loop * legs;
-  const hopIndex = Math.min(Math.floor(t), legs - 1);
-  const local = t - hopIndex;
+  const legIndex = Math.min(Math.floor(t), legs - 1);
+  const legProgress = Math.min(t - legIndex, 1);
+  const hopIndex = legIndex;
+  const local = legProgress;
 
   const planet = route[hopIndex];
   const nextPlanet = route[hopIndex + 1];
@@ -50,6 +56,8 @@ export function packetLegAtProgress(
     return {
       phase: "delivered",
       progress: loop,
+      legIndex: legs - 1,
+      legProgress: 1,
       hopIndex: legs - 1,
       planet: dest,
       tower: `T_${towerRoutes[towerRoutes.length - 1]?.exitTower ?? 0}`,
@@ -63,6 +71,8 @@ export function packetLegAtProgress(
     return {
       phase: "fiber",
       progress: loop,
+      legIndex,
+      legProgress,
       hopIndex,
       planet,
       tower: `T_${tr.exitTower}`,
@@ -76,6 +86,8 @@ export function packetLegAtProgress(
     return {
       phase: "void",
       progress: loop,
+      legIndex,
+      legProgress,
       hopIndex,
       planet,
       tower: `T_${tr.exitTower}`,
@@ -88,6 +100,8 @@ export function packetLegAtProgress(
   return {
     phase: "tower",
     progress: loop,
+    legIndex,
+    legProgress,
     hopIndex: hopIndex + 1,
     planet: nextPlanet,
     tower: `T_${towerRoutes[hopIndex + 1]?.entryTower ?? 0}`,

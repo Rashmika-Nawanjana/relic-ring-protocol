@@ -11,6 +11,8 @@ import {
 const IDLE: PacketLiveSnapshot = {
   phase: "idle",
   progress: 0,
+  legIndex: 0,
+  legProgress: 0,
   hopIndex: 0,
   planet: null,
   tower: null,
@@ -79,6 +81,7 @@ export function PacketLiveFeed() {
       const delta = (now - last) / 1000;
       last = now;
       progressRef.current += delta * (0.45 / pathLen);
+      if (progressRef.current >= 1) progressRef.current %= 1;
 
       const snapshot = packetLegAtProgress(
         progressRef.current,
@@ -166,11 +169,31 @@ export function PacketLiveFeed() {
             ))}
           </div>
 
-          <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-white/6">
-            <div
-              className="h-full rounded-full bg-zinc-400/70 transition-[width] duration-75"
-              style={{ width: `${(live.progress % 1) * 100}%` }}
-            />
+          <div className="mt-2 flex gap-1">
+            {route.slice(0, -1).map((from, i) => {
+              const to = route[i + 1];
+              const isPast = i < live.legIndex;
+              const isActive = i === live.legIndex;
+              const fill = isPast ? 100 : isActive ? live.legProgress * 100 : 0;
+
+              return (
+                <div key={`${from}-${to}`} className="flex min-w-0 flex-1 flex-col gap-1">
+                  <div className="h-1 overflow-hidden rounded-full bg-white/6">
+                    <div
+                      className="h-full rounded-full bg-zinc-300/80"
+                      style={{ width: `${fill}%` }}
+                    />
+                  </div>
+                  <span
+                    className={`truncate text-center text-[9px] ${
+                      isActive ? "text-zinc-400" : "text-zinc-700"
+                    }`}
+                  >
+                    {from}→{to}
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
           {live.encoding && (
