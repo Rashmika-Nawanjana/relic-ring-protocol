@@ -22,7 +22,7 @@ export function score(linkId: string, liveState: LinkLiveState): TrustScore {
     return { trust_score: 0 };
   }
 
-  const prior =
+  const prior: number =
     TRAINED_PARAMS.link_trust_priors[id as keyof typeof TRAINED_PARAMS.link_trust_priors] ??
     0.9;
 
