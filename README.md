@@ -39,7 +39,10 @@ Deploy to [Vercel](https://vercel.com/new) — import the repo and deploy. Supab
 | **Routing** | Dijkstra with `(planet, previous)` state for path-dependent fiber costs; **Lmax** enforced on graph edges |
 | **Resilience** | Kill planets or sever void links; next packet reroutes without crashing |
 | **Chimera CoPilot** | Live `/state` poll, per-hop model scoring, true-cost reroute, unified report |
+| **Phase 2 UI** | Chimera panel, CoPilot trace, NL input, 3D link health colors |
 | **Visualization** | React Three Fiber solar-system view, packet animation, live transit bar |
+
+Demo script: [docs/PHASE2_DEMO.md](./docs/PHASE2_DEMO.md)
 
 See [problem.md](./problem.md) for the full spec and [Equations.md](./Equations.md) for formulas.
 
@@ -168,7 +171,9 @@ src/lib/universe/
   packet-path.ts              # 3D animation path
 src/components/
   SimulatorApp.tsx            # Main layout
-  ControlPanel.tsx            # Send, kill node, sever link
+  ChimeraPanel.tsx            # Live link health poll + scores
+  CopilotTrace.tsx            # Unified CoPilot report table
+  ControlPanel.tsx            # Phase 1 + NL CoPilot send
   PacketTrace.tsx             # Encoding + hop log + packet schema
   LatencyBreakdown.tsx        # Route totals + per-hop table
   PacketLiveFeed.tsx          # Live transit bar on canvas

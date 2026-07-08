@@ -10,7 +10,9 @@ import {
 } from "react";
 import { loadUniverseConfig } from "@/lib/universe/load";
 import { buildScenePlanets } from "@/lib/universe/geometry";
-import { findRoute, buildVoidEdges } from "@/lib/universe/router";
+import { findRoute, buildVoidEdges, traceFixedRoute } from "@/lib/universe/router";
+import type { CopilotReport } from "@/lib/copilot/schema";
+import type { LinkHealthStatus } from "@/lib/chimera/panel-data";
 import type {
   RouteResult,
   ScenePlanet,
@@ -26,6 +28,13 @@ export type SceneSettings = {
   showTowerPaths: boolean;
 };
 
+export type CopilotSendInput = {
+  text?: string;
+  origin?: string;
+  destination?: string;
+  message?: string;
+};
+
 type UniverseContextValue = {
   config: UniverseConfig;
   planets: ScenePlanet[];
@@ -39,7 +48,15 @@ type UniverseContextValue = {
   isSending: boolean;
   packetTransmitKey: number;
   sceneSettings: SceneSettings;
+  copilotReport: CopilotReport | null;
+  copilotError: string | null;
+  isCopilotSending: boolean;
+  linkHealthMap: Map<string, LinkHealthStatus>;
+  chimeraTick: number | null;
+  trafficHistory: string[];
   setSceneSettings: (patch: Partial<SceneSettings>) => void;
+  setLinkHealthMap: (map: Map<string, LinkHealthStatus>) => void;
+  setChimeraTick: (tick: number) => void;
   resetView: () => void;
   resetViewTick: number;
   setSelectedId: (id: string | null) => void;
@@ -47,6 +64,7 @@ type UniverseContextValue = {
   toggleKill: (id: string) => void;
   toggleKillLink: (key: string) => void;
   sendPacket: (origin: string, destination: string, message: string) => Promise<void>;
+  sendCopilot: (input: CopilotSendInput) => Promise<void>;
 };
 
 const UniverseContext = createContext<UniverseContextValue | null>(null);
@@ -73,6 +91,14 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
   const [packetTransmitKey, setPacketTransmitKey] = useState(0);
   const [sceneSettings, setSceneSettingsState] = useState<SceneSettings>(DEFAULT_SCENE);
   const [resetViewTick, setResetViewTick] = useState(0);
+  const [copilotReport, setCopilotReport] = useState<CopilotReport | null>(null);
+  const [copilotError, setCopilotError] = useState<string | null>(null);
+  const [isCopilotSending, setIsCopilotSending] = useState(false);
+  const [linkHealthMap, setLinkHealthMap] = useState<Map<string, LinkHealthStatus>>(
+    new Map(),
+  );
+  const [chimeraTick, setChimeraTick] = useState<number | null>(null);
+  const [trafficHistory, setTrafficHistory] = useState<string[]>([]);
 
   const edges = useMemo(
     () => buildVoidEdges(config, killed, killedLinks),
@@ -102,6 +128,7 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
         return next;
       });
       clearRoute();
+      setCopilotReport(null);
     },
     [clearRoute],
   );
@@ -115,6 +142,7 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
         return next;
       });
       clearRoute();
+      setCopilotReport(null);
     },
     [clearRoute],
   );
@@ -122,6 +150,8 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
   const sendPacket = useCallback(
     async (origin: string, destination: string, message: string) => {
       setIsSending(true);
+      setCopilotReport(null);
+      setCopilotError(null);
       await new Promise((r) => setTimeout(r, 400));
       const result = findRoute(
         config,
@@ -139,6 +169,66 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
     [config, killed, killedLinks],
   );
 
+  const sendCopilot = useCallback(
+    async (input: CopilotSendInput) => {
+      setIsCopilotSending(true);
+      setCopilotError(null);
+      try {
+        const res = await fetch("/api/copilot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...input,
+            killed: [...killed],
+            killed_links: [...killedLinks],
+            traffic_history: trafficHistory,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error ?? "CoPilot routing failed");
+        }
+
+        const report: CopilotReport = {
+          origin_id: data.origin_id,
+          destination_id: data.destination_id,
+          chosen_path: data.chosen_path,
+          link_evaluations: data.link_evaluations,
+          final_latency_estimate_ms: data.final_latency_estimate_ms,
+          explanation: data.explanation,
+        };
+
+        setCopilotReport(report);
+        setRoute(report.chosen_path);
+
+        const message =
+          input.message ??
+          (input.text?.match(/:\s*(.+)$/)?.[1]?.trim() || "Hello world");
+
+        const trace = traceFixedRoute(
+          config,
+          report.chosen_path,
+          message,
+          killed,
+          killedLinks,
+        );
+        setRouteResult(trace);
+        if (trace.ok) setPacketTransmitKey((k) => k + 1);
+
+        setTrafficHistory((prev) => [
+          ...prev,
+          ...report.link_evaluations.map((e) => e.link_id),
+        ].slice(-24));
+      } catch (e) {
+        setCopilotError(e instanceof Error ? e.message : "CoPilot failed");
+        setCopilotReport(null);
+      } finally {
+        setIsCopilotSending(false);
+      }
+    },
+    [config, killed, killedLinks, trafficHistory],
+  );
+
   return (
     <UniverseContext.Provider
       value={{
@@ -154,7 +244,15 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
         isSending,
         packetTransmitKey,
         sceneSettings,
+        copilotReport,
+        copilotError,
+        isCopilotSending,
+        linkHealthMap,
+        chimeraTick,
+        trafficHistory,
         setSceneSettings,
+        setLinkHealthMap,
+        setChimeraTick,
         resetView,
         resetViewTick,
         setSelectedId,
@@ -162,6 +260,7 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
         toggleKill,
         toggleKillLink,
         sendPacket,
+        sendCopilot,
       }}
     >
       {children}

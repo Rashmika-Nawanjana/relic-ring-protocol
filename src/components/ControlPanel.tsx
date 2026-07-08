@@ -11,8 +11,10 @@ export function ControlPanel() {
     killedLinks,
     selectedId,
     isSending,
+    isCopilotSending,
     routeResult,
     sendPacket,
+    sendCopilot,
     toggleKill,
     toggleKillLink,
   } = useUniverse();
@@ -22,7 +24,11 @@ export function ControlPanel() {
   const [origin, setOrigin] = useState("Aegis");
   const [destination, setDestination] = useState("Caelum");
   const [message, setMessage] = useState("Hello world");
+  const [nlRequest, setNlRequest] = useState(
+    "Send Caelum to Aegis: Hello world",
+  );
   const [linkKey, setLinkKey] = useState(voidLinks[0]?.key ?? "");
+  const busy = isSending || isCopilotSending;
 
   return (
     <section className="panel-section" aria-label="Network controls">
@@ -85,10 +91,45 @@ export function ControlPanel() {
         <button
           type="button"
           onClick={() => sendPacket(origin, destination, message)}
-          disabled={isSending || origin === destination}
+          disabled={busy || origin === destination}
           className="mt-1 min-h-10 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-medium text-zinc-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {isSending ? "Computing route…" : "Send packet"}
+          {isSending ? "Computing route…" : "Send packet (Phase 1)"}
+        </button>
+      </div>
+
+      <div className="mt-5 border-t border-white/5 pt-4">
+        <h3 className="text-sm font-medium text-zinc-200">CoPilot (Phase 2)</h3>
+        <p className="mt-0.5 text-xs text-zinc-500">
+          Natural-language request → live Chimera evaluation
+        </p>
+        <label className="mt-3 block">
+          <span className="field-label">NL request</span>
+          <textarea
+            value={nlRequest}
+            onChange={(e) => setNlRequest(e.target.value)}
+            rows={2}
+            className="field-input resize-none font-mono text-sm"
+            placeholder="Send Caelum to Aegis: Hello world"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => sendCopilot({ text: nlRequest })}
+          disabled={busy || !nlRequest.trim()}
+          className="mt-2 min-h-10 w-full rounded-lg border border-[var(--accent)]/40 bg-[var(--accent-muted)] px-4 py-2 text-sm font-medium text-[var(--accent)] transition hover:border-[var(--accent)]/60 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isCopilotSending ? "CoPilot evaluating…" : "CoPilot send"}
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            sendCopilot({ origin, destination, message })
+          }
+          disabled={busy || origin === destination}
+          className="mt-2 min-h-9 w-full rounded-lg border border-white/8 px-3 py-2 text-xs text-zinc-400 transition hover:border-white/12 hover:bg-white/[0.04] disabled:opacity-40"
+        >
+          CoPilot with dropdowns above
         </button>
       </div>
 

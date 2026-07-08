@@ -11,6 +11,8 @@ import { LatencyBreakdown } from "@/components/LatencyBreakdown";
 import { SceneControls } from "@/components/SceneControls";
 import { PacketLiveFeed } from "@/components/PacketLiveFeed";
 import { UniverseInitBanner } from "@/components/UniverseInitBanner";
+import { ChimeraPanel } from "@/components/ChimeraPanel";
+import { CopilotTrace } from "@/components/CopilotTrace";
 
 const DynamicCanvas = dynamic(
   () => Promise.resolve({ default: CanvasWrapper }),
@@ -62,16 +64,18 @@ export function SimulatorApp() {
           <PacketLiveFeed />
         </div>
 
-        <aside className="flex max-h-[42vh] w-full flex-col overflow-y-auto border-t border-white/6 bg-[var(--panel-bg)] backdrop-blur-xl lg:max-h-full lg:w-[22rem] lg:border-t-0 lg:border-l">
+        <aside className="flex max-h-[42vh] w-full flex-col overflow-y-auto border-t border-white/6 bg-[var(--panel-bg)] backdrop-blur-xl lg:max-h-full lg:w-[26rem] lg:border-t-0 lg:border-l">
           <header className="hidden border-b border-white/6 px-5 py-4 lg:block">
             <h1 className="text-lg font-medium tracking-tight text-zinc-100">
               Relic Ring
             </h1>
             <p className="mt-0.5 text-xs text-zinc-500">
-              Zeta-26 routing simulator
+              Zeta-26 · Phase 1 physics + Phase 2 Chimera
             </p>
           </header>
           <ControlPanel />
+          <ChimeraPanel />
+          <CopilotTrace />
           <PacketTrace />
           <LatencyBreakdown />
         </aside>

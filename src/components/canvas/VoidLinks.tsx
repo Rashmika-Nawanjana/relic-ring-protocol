@@ -26,6 +26,7 @@ export function VoidLinks() {
     selectedId,
     hoveredId,
     sceneSettings,
+    linkHealthMap,
   } = useUniverse();
 
   const planetMap = useMemo(
@@ -62,6 +63,7 @@ export function VoidLinks() {
           isSevered: killedLinks.has(key),
           isValid: edge.valid,
           invalid: edge.voidDistanceKm > 0 && !edge.valid && !killedLinks.has(key),
+          health: linkHealthMap.get(key) ?? "ok",
         };
       })
       .filter(Boolean) as {
@@ -71,8 +73,43 @@ export function VoidLinks() {
       isSevered: boolean;
       isValid: boolean;
       invalid: boolean;
+      health: "ok" | "congested" | "danger";
     }[];
-  }, [edges, planetMap, routeSegments, killed, killedLinks]);
+  }, [edges, planetMap, routeSegments, killedLinks, linkHealthMap]);
+
+  function linkColor(line: {
+    isActive: boolean;
+    isSevered: boolean;
+    isValid: boolean;
+    invalid: boolean;
+    health: "ok" | "congested" | "danger";
+  }): string {
+    if (line.isActive) return "#818cf8";
+    if (line.isSevered) return "#3f3f46";
+    if (!line.isValid || line.invalid) return "#7f1d1d";
+    switch (line.health) {
+      case "danger":
+        return "#ef4444";
+      case "congested":
+        return "#f59e0b";
+      default:
+        return "#22c55e";
+    }
+  }
+
+  function linkOpacity(line: {
+    isActive: boolean;
+    isSevered: boolean;
+    isValid: boolean;
+    health: "ok" | "congested" | "danger";
+  }): number {
+    if (line.isSevered) return 0.08;
+    if (line.isActive) return 0.35;
+    if (!line.isValid) return 0.15;
+    if (line.health === "danger") return 0.55;
+    if (line.health === "congested") return 0.45;
+    return 0.35;
+  }
 
   const hasRoute = route.length >= 2;
   const showPaths = sceneSettings.showTowerPaths;
@@ -84,28 +121,10 @@ export function VoidLinks() {
           <Line
             key={line.key}
             points={line.points}
-            color={
-              line.isActive
-                ? "#818cf8"
-                : line.isSevered
-                  ? "#3f3f46"
-                  : line.isValid
-                    ? "#334155"
-                    : line.invalid
-                      ? "#7f1d1d"
-                      : "#1e293b"
-            }
+            color={linkColor(line)}
             lineWidth={line.isActive ? 2 : 1}
             transparent
-            opacity={
-              line.isSevered
-                ? 0.08
-                : line.isActive
-                  ? 0.35
-                  : line.isValid
-                    ? 0.4
-                    : 0.15
-            }
+            opacity={linkOpacity(line)}
           />
         ))}
 

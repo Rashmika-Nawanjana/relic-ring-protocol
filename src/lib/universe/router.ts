@@ -159,27 +159,13 @@ function buildPacket(
   };
 }
 
-export function findRoute(
+function buildRouteResult(
   config: UniverseConfig,
+  route: string[],
   origin: string,
   destination: string,
-  killed: Set<string> = new Set(),
-  message = "Hello world",
-  killedLinks: Set<string> = new Set(),
+  message: string,
 ): RouteResult {
-  if (origin === destination) {
-    return { ok: false, error: "Origin and destination must differ." };
-  }
-  if (killed.has(origin) || killed.has(destination)) {
-    return { ok: false, error: "Origin or destination planet is offline." };
-  }
-
-  const adj = buildAdjacency(config, killed, killedLinks);
-  const route = dijkstraLatency(config, adj, origin, destination);
-  if (!route) {
-    return { ok: false, error: "Undeliverable — no route within Lmax constraints." };
-  }
-
   const meta = config.universe_metadata;
   const nodeMap = new Map(config.nodes.map((n) => [n.id, n]));
   const scale = meta.coordinate_scale_unit_km;
@@ -233,14 +219,7 @@ export function findRoute(
     }
   }
 
-  const packet = buildPacket(
-    origin,
-    destination,
-    route,
-    hops,
-    message,
-    total,
-  );
+  const packet = buildPacket(origin, destination, route, hops, message, total);
 
   return {
     ok: true,
@@ -252,6 +231,86 @@ export function findRoute(
     tower_routes: towerRoutes,
     packet,
   };
+}
+
+function validateFixedRoute(
+  config: UniverseConfig,
+  route: string[],
+  origin: string,
+  destination: string,
+  killed: Set<string>,
+  killedLinks: Set<string>,
+): string | null {
+  if (route.length < 2) return "Route must include at least two planets";
+  if (route[0] !== origin || route[route.length - 1] !== destination) {
+    return "Route must start at origin and end at destination";
+  }
+  const meta = config.universe_metadata;
+  const nodeMap = new Map(config.nodes.map((n) => [n.id, n]));
+  for (const id of route) {
+    if (!nodeMap.has(id)) return `Unknown planet in route: ${id}`;
+    if (killed.has(id)) return `Planet offline on route: ${id}`;
+  }
+  for (let i = 0; i < route.length - 1; i++) {
+    const a = nodeMap.get(route[i]!)!;
+    const b = nodeMap.get(route[i + 1]!)!;
+    const key = voidEdgeKey(a.id, b.id);
+    if (killedLinks.has(key)) return `Void link severed: ${key}`;
+    const L = voidDistanceKm(a, b, meta.coordinate_scale_unit_km);
+    if (L <= 0 || L > meta.max_void_hop_distance_km) {
+      return `Hop ${key} exceeds Lmax`;
+    }
+  }
+  return null;
+}
+
+/** Build hop log and packet for a predetermined planet path (CoPilot chosen_path). */
+export function traceFixedRoute(
+  config: UniverseConfig,
+  route: string[],
+  message = "Hello world",
+  killed: Set<string> = new Set(),
+  killedLinks: Set<string> = new Set(),
+): RouteResult {
+  if (route.length < 2) {
+    return { ok: false, error: "Route must include at least two planets" };
+  }
+  const origin = route[0]!;
+  const destination = route[route.length - 1]!;
+  const err = validateFixedRoute(
+    config,
+    route,
+    origin,
+    destination,
+    killed,
+    killedLinks,
+  );
+  if (err) return { ok: false, error: err };
+  return buildRouteResult(config, route, origin, destination, message);
+}
+
+export function findRoute(
+  config: UniverseConfig,
+  origin: string,
+  destination: string,
+  killed: Set<string> = new Set(),
+  message = "Hello world",
+  killedLinks: Set<string> = new Set(),
+): RouteResult {
+  if (origin === destination) {
+    return { ok: false, error: "Origin and destination must differ." };
+  }
+  if (killed.has(origin) || killed.has(destination)) {
+    return { ok: false, error: "Origin or destination planet is offline." };
+  }
+
+  const adj = buildAdjacency(config, killed, killedLinks);
+  const route = dijkstraLatency(config, adj, origin, destination);
+  if (!route) {
+    return { ok: false, error: "Undeliverable — no route within Lmax constraints." };
+  }
+
+  return buildRouteResult(config, route, origin, destination, message);
 }
 
 export function buildVoidEdges(
@@ -274,20 +333,25 @@ export function buildVoidEdges(
     key: string;
   }[] = [];
 
-  for (let i = 0; i < config.nodes.length; i++) {
-    for (let j = i + 1; j < config.nodes.length; j++) {
-      const a = config.nodes[i];
-      const b = config.nodes[j];
-      const key = voidEdgeKey(a.id, b.id);
-      const L = voidDistanceKm(a, b, meta.coordinate_scale_unit_km);
-      const valid =
-        !killed.has(a.id) &&
-        !killed.has(b.id) &&
-        !killedLinks.has(key) &&
-        L > 0 &&
-        L <= meta.max_void_hop_distance_km;
-      edges.push({ from: a.id, to: b.id, voidDistanceKm: L, valid, key });
-    }
+  const pairs =
+    config.interplanetary_links?.map((l) => [l.planet_a, l.planet_b] as const) ??
+    config.nodes.flatMap((a, i) =>
+      config.nodes.slice(i + 1).map((b) => [a.id, b.id] as const),
+    );
+
+  for (const [from, to] of pairs) {
+    const a = config.nodes.find((n) => n.id === from);
+    const b = config.nodes.find((n) => n.id === to);
+    if (!a || !b) continue;
+    const key = voidEdgeKey(a.id, b.id);
+    const L = voidDistanceKm(a, b, meta.coordinate_scale_unit_km);
+    const valid =
+      !killed.has(a.id) &&
+      !killed.has(b.id) &&
+      !killedLinks.has(key) &&
+      L > 0 &&
+      L <= meta.max_void_hop_distance_km;
+    edges.push({ from: a.id, to: b.id, voidDistanceKm: L, valid, key });
   }
   return edges;
 }
@@ -297,17 +361,7 @@ export function getNodeMap(config: UniverseConfig): Map<string, PlanetNode> {
 }
 
 export function listValidVoidLinks(config: UniverseConfig): { key: string; from: string; to: string }[] {
-  const meta = config.universe_metadata;
-  const links: { key: string; from: string; to: string }[] = [];
-  for (let i = 0; i < config.nodes.length; i++) {
-    for (let j = i + 1; j < config.nodes.length; j++) {
-      const a = config.nodes[i];
-      const b = config.nodes[j];
-      const L = voidDistanceKm(a, b, meta.coordinate_scale_unit_km);
-      if (L > 0 && L <= meta.max_void_hop_distance_km) {
-        links.push({ key: voidEdgeKey(a.id, b.id), from: a.id, to: b.id });
-      }
-    }
-  }
-  return links;
+  return buildVoidEdges(config, new Set(), new Set())
+    .filter((e) => e.valid)
+    .map((e) => ({ key: e.key, from: e.from, to: e.to }));
 }
