@@ -1,6 +1,6 @@
 import type { PlanetTowerRoute } from "./packet-path";
 
-export type PacketLegPhase = "idle" | "fiber" | "void" | "tower" | "delivered";
+export type PacketLegPhase = "idle" | "fiber" | "void" | "tower" | "delivered" | "held";
 
 export type PacketLiveSnapshot = {
   phase: PacketLegPhase;

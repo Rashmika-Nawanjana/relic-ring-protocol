@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -72,6 +73,10 @@ type UniverseContextValue = {
   packetResumeProgress: number;
   /** Chaos-test notice shown when a severed link forced a live pivot. */
   rerouteNotice: string | null;
+  /** True when the packet is held at a planet waiting for a safe hop. */
+  packetHeld: boolean;
+  /** Planet where the packet is held, if any. */
+  heldAtPlanet: string | null;
   setSceneSettings: (patch: Partial<SceneSettings>) => void;
   setLinkHealthMap: (map: Map<string, LinkHealthStatus>) => void;
   setChimeraTick: (tick: number) => void;
@@ -121,6 +126,9 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
   const [lastMessage, setLastMessage] = useState("Hello world");
   const [packetResumeProgress, setPacketResumeProgress] = useState(0);
   const [rerouteNotice, setRerouteNotice] = useState<string | null>(null);
+  const [packetHeld, setPacketHeld] = useState(false);
+  const [heldAtPlanet, setHeldAtPlanet] = useState<string | null>(null);
+  const hopCheckInFlight = useRef(false);
   const packetLegRef = useRef(0);
 
   const edges = useMemo(
@@ -142,6 +150,8 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
     setRouteResult(null);
     setPacketResumeProgress(0);
     setRerouteNotice(null);
+    setPacketHeld(false);
+    setHeldAtPlanet(null);
   }, []);
 
   const toggleKill = useCallback(
@@ -235,6 +245,156 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
     [config, killed, killedLinks, route, routeResult, lastMessage, clearRoute],
   );
 
+  // ── Hop-by-hop gate (B+C approach) ───────────────────────────────
+  // Each time the Chimera panel polls a new tick while a packet is in
+  // flight, check whether the **next** void hop on the current route is
+  // still safe.  If it isn't:
+  //   1. Try to reroute from the current planet to the same destination.
+  //   2. If no alternative path → hold the packet at the current planet
+  //      and retry on the next tick.
+  useEffect(() => {
+    if (route.length < 2 || !routeResult?.ok) return;
+    if (packetHeld) {
+      // ── Retry logic (C): packet is held — see if a safe path opened ──
+      if (!heldAtPlanet) return;
+      if (hopCheckInFlight.current) return;
+      hopCheckInFlight.current = true;
+
+      const destination = route[route.length - 1]!;
+      if (heldAtPlanet === destination) {
+        setPacketHeld(false);
+        setHeldAtPlanet(null);
+        hopCheckInFlight.current = false;
+        return;
+      }
+
+      fetch(`/api/copilot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          origin: heldAtPlanet,
+          destination,
+          message: lastMessage,
+          killed: [...killed],
+          killed_links: [...killedLinks],
+          traffic_history: trafficHistory,
+        }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data.ok) return;
+
+          const traveledIdx = route.indexOf(heldAtPlanet);
+          const traveled = traveledIdx >= 0 ? route.slice(0, traveledIdx) : [];
+          const newRoute = [...traveled, ...data.chosen_path];
+
+          const trace = traceFixedRoute(config, newRoute, lastMessage, killed, killedLinks);
+          if (!trace.ok) return;
+
+          setRoute(newRoute);
+          setRouteResult(trace);
+          const resumeAt = traveled.length / (newRoute.length - 1);
+          setPacketResumeProgress(resumeAt);
+          setPacketTransmitKey((k) => k + 1);
+          setPacketHeld(false);
+          setHeldAtPlanet(null);
+          setRerouteNotice(
+            `Held at ${heldAtPlanet} — path cleared, resumed via ${data.chosen_path.slice(1).join(" → ")}.`,
+          );
+        })
+        .catch(() => {})
+        .finally(() => {
+          hopCheckInFlight.current = false;
+        });
+
+      return;
+    }
+
+    // ── Gate logic (B): check next hop ──
+    const legs = route.length - 1;
+    const currentLeg = Math.max(0, Math.min(packetLegRef.current, legs - 1));
+    const nextHopIdx = currentLeg;
+    if (nextHopIdx >= legs) return;
+
+    const from = route[nextHopIdx]!;
+    const to = route[nextHopIdx + 1]!;
+    const linkId = [from, to].sort().join("-");
+
+    const health = linkHealthMap.get(linkId);
+    if (health === "ok" || health === "congested") return;
+    if (health !== "danger") return;
+
+    // Next hop is danger — check server for definitive answer
+    if (hopCheckInFlight.current) return;
+    hopCheckInFlight.current = true;
+
+    fetch(`/api/chimera/check-hop?link=${encodeURIComponent(linkId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.ok || data.safe) return;
+
+        const destination = route[route.length - 1]!;
+        const pivot = from;
+
+        if (pivot === destination) return;
+
+        // Try reroute from current planet to destination
+        return fetch("/api/copilot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            origin: pivot,
+            destination,
+            message: lastMessage,
+            killed: [...killed],
+            killed_links: [...killedLinks],
+            exclude_links: [linkId],
+            traffic_history: trafficHistory,
+          }),
+        })
+          .then((r) => r.json())
+          .then((reroute) => {
+            const traveled = route.slice(0, nextHopIdx);
+
+            if (!reroute.ok) {
+              // No alternative → hold (C)
+              setPacketHeld(true);
+              setHeldAtPlanet(pivot);
+              setRerouteNotice(
+                `Chimera blocked ${linkId} — packet held at ${pivot}. ${data.reason ?? "Link unsafe"}. Retrying each tick…`,
+              );
+              return;
+            }
+
+            // Reroute to same destination (B)
+            const newRoute = [...traveled, ...reroute.chosen_path];
+            const trace = traceFixedRoute(config, newRoute, lastMessage, killed, killedLinks);
+            if (!trace.ok) {
+              setPacketHeld(true);
+              setHeldAtPlanet(pivot);
+              setRerouteNotice(
+                `Chimera blocked ${linkId} — reroute trace failed, holding at ${pivot}.`,
+              );
+              return;
+            }
+
+            setRoute(newRoute);
+            setRouteResult(trace);
+            const resumeAt = traveled.length / (newRoute.length - 1);
+            setPacketResumeProgress(resumeAt);
+            setPacketTransmitKey((k) => k + 1);
+            setRerouteNotice(
+              `Chimera tick update: ${linkId} unsafe (${data.reason}). Pivoted at ${pivot} → ${reroute.chosen_path.slice(1).join(" → ")}.`,
+            );
+          });
+      })
+      .catch(() => {})
+      .finally(() => {
+        hopCheckInFlight.current = false;
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chimeraTick, linkHealthMap]);
+
   const sendPacket = useCallback(
     async (origin: string, destination: string, message: string) => {
       setIsSending(true);
@@ -243,6 +403,8 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
       setCopilotError(null);
       setRerouteNotice(null);
       setPacketResumeProgress(0);
+      setPacketHeld(false);
+      setHeldAtPlanet(null);
       setLastMessage(message);
       await new Promise((r) => setTimeout(r, 400));
       const result = findRoute(
@@ -267,6 +429,8 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
       setCopilotError(null);
       setRerouteNotice(null);
       setPacketResumeProgress(0);
+      setPacketHeld(false);
+      setHeldAtPlanet(null);
       try {
         const res = await fetch("/api/copilot", {
           method: "POST",
@@ -355,6 +519,8 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
         packetLegRef,
         packetResumeProgress,
         rerouteNotice,
+        packetHeld,
+        heldAtPlanet,
         setSceneSettings,
         setLinkHealthMap,
         setChimeraTick,

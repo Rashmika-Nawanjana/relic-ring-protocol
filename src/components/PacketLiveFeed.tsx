@@ -27,6 +27,7 @@ const PHASE_LABEL: Record<PacketLiveSnapshot["phase"], string> = {
   void: "Void laser",
   tower: "Tower relay",
   delivered: "Delivered",
+  held: "Held — waiting",
 };
 
 function estimatePathLength(routeLen: number) {
@@ -43,6 +44,8 @@ export function PacketLiveFeed() {
     packetLegRef,
     packetResumeProgress,
     rerouteNotice,
+    packetHeld,
+    heldAtPlanet,
   } = useUniverse();
   const [live, setLive] = useState<PacketLiveSnapshot>(IDLE);
   const progressRef = useRef(0);
@@ -88,6 +91,12 @@ export function PacketLiveFeed() {
     const pathLen = estimatePathLength(route.length);
 
     const tick = (now: number) => {
+      if (packetHeld) {
+        last = now;
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+
       const delta = (now - last) / 1000;
       last = now;
       progressRef.current += delta * (0.45 / pathLen);
@@ -115,14 +124,17 @@ export function PacketLiveFeed() {
     towerRoutes,
     encodingsByPlanet,
     packetLegRef,
+    packetHeld,
   ]);
 
   const hasRoute = routeResult?.ok && route.length >= 1;
   const statusLabel = isSending
     ? "Computing route"
-    : hasRoute
-      ? PHASE_LABEL[live.phase]
-      : "No active route";
+    : packetHeld
+      ? `Held at ${heldAtPlanet ?? "planet"} — retrying`
+      : hasRoute
+        ? PHASE_LABEL[live.phase]
+        : "No active route";
 
   return (
     <div
@@ -134,11 +146,13 @@ export function PacketLiveFeed() {
         <div className="flex items-center gap-2">
           <span
             className={`h-1.5 w-1.5 rounded-full ${
-              isSending
-                ? "animate-pulse bg-[var(--accent)]"
-                : hasRoute && live.phase !== "idle"
-                  ? "animate-pulse bg-zinc-300"
-                  : "bg-zinc-600"
+              packetHeld
+                ? "animate-pulse bg-amber-400"
+                : isSending
+                  ? "animate-pulse bg-[var(--accent)]"
+                  : hasRoute && live.phase !== "idle"
+                    ? "animate-pulse bg-zinc-300"
+                    : "bg-zinc-600"
             }`}
           />
           <span className="text-xs font-medium text-zinc-300">
@@ -171,7 +185,7 @@ export function PacketLiveFeed() {
         <>
           <div className="mt-2 flex flex-wrap gap-1">
             {route.map((id, i) => (
-              <span key={id} className="flex items-center gap-1 text-[11px]">
+              <span key={`${id}-${i}`} className="flex items-center gap-1 text-[11px]">
                 {i > 0 && <span className="text-zinc-700">→</span>}
                 <span
                   className={
@@ -196,7 +210,7 @@ export function PacketLiveFeed() {
               const fill = isPast ? 100 : isActive ? live.legProgress * 100 : 0;
 
               return (
-                <div key={`${from}-${to}`} className="flex min-w-0 flex-1 flex-col gap-1">
+                <div key={`leg-${i}-${from}-${to}`} className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="h-1 overflow-hidden rounded-full bg-white/6">
                     <div
                       className="h-full rounded-full bg-zinc-300/80"

@@ -229,7 +229,7 @@ function ActiveRouteVisuals({
           const key = voidEdgeKey(route[i], route[i + 1]);
           return (
             <VoidHopLine
-              key={key}
+              key={`hop-${i}-${key}`}
               from={from}
               to={to}
               sendTower={tr.exitTower}
