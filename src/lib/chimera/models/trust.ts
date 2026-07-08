@@ -3,7 +3,7 @@ import { normalizeLinkId } from "../link-id";
 import { expectedLatencyMs } from "./congestion";
 import { TRAINED_PARAMS } from "./params";
 
-const { live_lie_gap_threshold, honest_noise_p95 } = TRAINED_PARAMS;
+const { live_lie_gap_threshold, honest_noise_p95, live_lie_penalty_mult } = TRAINED_PARAMS;
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -38,7 +38,7 @@ export function score(linkId: string, liveState: LinkLiveState): TrustScore {
 
   // Live lie detection: self reports much faster than load implies
   if (relativeGap > live_lie_gap_threshold) {
-    const liePenalty = Math.min(0.85, (relativeGap - live_lie_gap_threshold) * 2.5);
+    const liePenalty = Math.min(0.85, (relativeGap - live_lie_gap_threshold) * live_lie_penalty_mult);
     trust *= 1 - liePenalty;
   }
 

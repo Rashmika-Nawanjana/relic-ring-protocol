@@ -1,4 +1,5 @@
 import type { ModelScores } from "../types";
+import { TRAINED_PARAMS } from "./params";
 
 /** Tunable weights for Person 2 true-cost router (documented for Decision Audit). */
 export type CostWeights = {
@@ -9,8 +10,8 @@ export type CostWeights = {
 };
 
 export const DEFAULT_COST_WEIGHTS: CostWeights = {
-  trust_scale: 0.5,
-  risk_scale: 0.3,
+  trust_scale: TRAINED_PARAMS.cost_trust_scale,
+  risk_scale: TRAINED_PARAMS.cost_risk_scale,
 };
 
 /**

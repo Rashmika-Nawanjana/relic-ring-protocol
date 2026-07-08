@@ -81,8 +81,13 @@ export function explainTargeting(
   const { risk_score } = targetingRisk(id, liveState, ourTrafficHistory);
   const share = liveState.traffic_share;
 
+  const linkRate =
+    TRAINED_PARAMS.link_jam_rates[id as keyof typeof TRAINED_PARAMS.link_jam_rates] ??
+    TRAINED_PARAMS.global_jam_rate;
+
   let detail =
-    `Network traffic_share=${(share * 100).toFixed(2)}% (jam onset ~${(JAM_ONSET_SHARE * 100).toFixed(1)}%). ` +
+    `Network traffic_share=${(share * 100).toFixed(2)}% (jam onset ~${(JAM_ONSET_SHARE * 100).toFixed(1)}%, ` +
+    `link historical jam rate=${(linkRate * 100).toFixed(1)}%). ` +
     `Logistic risk=${risk_score.toFixed(3)}.`;
 
   if (ourTrafficHistory.length > 0) {
