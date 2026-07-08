@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "eslint",
     "train:models": "tsx src/lib/chimera/models/train.ts",
-    "test:models": "tsx --test src/lib/chimera/models/models.test.ts"
+    "test:models": "tsx --test src/lib/chimera/models/models.test.ts",
+    "evaluate:models": "python scripts/evaluate_models.py"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

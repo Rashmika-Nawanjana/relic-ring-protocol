@@ -1,6 +1,6 @@
-export { predict as predictCongestion, expectedLatencyMs, SATURATION_LOAD_RATIO } from "./congestion";
+export { predict as predictCongestion, predictPenaltyMs, expectedLatencyMs, SATURATION_LOAD_RATIO } from "./congestion";
 export { score as scoreTrust, SPOOFED_LINKS, isKnownSpoofedLink } from "./trust";
-export { risk as targetingRisk, JAM_ONSET_SHARE } from "./targeting";
+export { risk as targetingRisk, calibratedShareRisk, SHARE_BINS } from "./targeting";
 export { TRAINED_PARAMS } from "./params";
 export type { TrainedParams } from "./params";
 

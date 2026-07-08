@@ -2,45 +2,331 @@
 export const TRAINED_PARAMS = {
   "saturation_load_ratio": 0.9136,
   "congestion_onset_ratio": 0.35,
-  "congestion_exponent": 1.5,
-  "congestion_scale_ms": 1024350.3,
-  "link_baselines_ms": {
-    "Aegis-Boreas": 60195.11,
-    "Aegis-Dawn": 121354.45,
-    "Aegis-Elysium": 155064.96,
-    "Boreas-Dawn": 69358.07,
-    "Boreas-Elysium": 98776.05,
-    "Boreas-Fenix": 136357.03,
-    "Caelum-Dawn": 114327.42,
-    "Caelum-Elysium": 129180.81,
-    "Caelum-Fenix": 113826.01,
-    "Dawn-Elysium": 101627.49,
-    "Dawn-Fenix": 70937.99,
-    "Elysium-Fenix": 166642.17
+  "power_law_weight": 0.5,
+  "load_bin_count": 10,
+  "link_congestion": {
+    "Aegis-Boreas": {
+      "baseline_ms": 59620.25,
+      "scale_ms": 590131.8,
+      "exponent": 1.3,
+      "load_bin_penalty_ms": [
+        1756.2,
+        5453.6,
+        16660.0,
+        32454.9,
+        63867.4,
+        118979.6,
+        215109.8,
+        353648.7,
+        605253.5,
+        590131.8
+      ]
+    },
+    "Aegis-Dawn": {
+      "baseline_ms": 120303.1,
+      "scale_ms": 1169646.6,
+      "exponent": 1.3,
+      "load_bin_penalty_ms": [
+        1965.7,
+        7142.4,
+        26640.9,
+        61796.3,
+        119961.1,
+        247633.9,
+        413456.6,
+        806219.7,
+        1001044.5,
+        1169646.6
+      ]
+    },
+    "Aegis-Elysium": {
+      "baseline_ms": 153981.62,
+      "scale_ms": 1886920.8,
+      "exponent": 1.5,
+      "load_bin_penalty_ms": [
+        2608.1,
+        11757.7,
+        35933.3,
+        83702.1,
+        156520.4,
+        321497.5,
+        485857.3,
+        1023749.4,
+        2573088.3,
+        1886920.8
+      ]
+    },
+    "Boreas-Dawn": {
+      "baseline_ms": 69060.48,
+      "scale_ms": 603927.8,
+      "exponent": 1.2,
+      "load_bin_penalty_ms": [
+        987.9,
+        5673.6,
+        15909.1,
+        37656.1,
+        70200.8,
+        138475.4,
+        237819.1,
+        452427.0,
+        523098.9,
+        603927.8
+      ]
+    },
+    "Boreas-Elysium": {
+      "baseline_ms": 98230.49,
+      "scale_ms": 718316.1,
+      "exponent": 1.1,
+      "load_bin_penalty_ms": [
+        1274.5,
+        6809.7,
+        23332.3,
+        51446.9,
+        107706.6,
+        191420.3,
+        342826.8,
+        520591.1,
+        629672.2,
+        718316.1
+      ]
+    },
+    "Boreas-Fenix": {
+      "baseline_ms": 136040.89,
+      "scale_ms": 1295348.4,
+      "exponent": 1.3,
+      "load_bin_penalty_ms": [
+        1081.2,
+        10253.5,
+        32227.1,
+        75402.9,
+        150602.1,
+        259190.9,
+        438745.2,
+        945241.2,
+        1108626.7,
+        1295348.4
+      ]
+    },
+    "Caelum-Dawn": {
+      "baseline_ms": 113787.15,
+      "scale_ms": 1029294.3,
+      "exponent": 1.3,
+      "load_bin_penalty_ms": [
+        2563.0,
+        7832.2,
+        25802.3,
+        57579.3,
+        114897.7,
+        210543.8,
+        368499.6,
+        616584.2,
+        1283755.0,
+        1029294.3
+      ]
+    },
+    "Caelum-Elysium": {
+      "baseline_ms": 128588.66,
+      "scale_ms": 1204397.1,
+      "exponent": 1.3,
+      "load_bin_penalty_ms": [
+        2114.7,
+        9135.8,
+        30235.8,
+        64519.7,
+        145330.1,
+        248213.1,
+        464263.6,
+        903699.5,
+        1030785.8,
+        1204397.1
+      ]
+    },
+    "Caelum-Fenix": {
+      "baseline_ms": 113112.84,
+      "scale_ms": 1229631.4,
+      "exponent": 1.4,
+      "load_bin_penalty_ms": [
+        1644.0,
+        7859.1,
+        27203.5,
+        59526.7,
+        128595.3,
+        210780.1,
+        388889.1,
+        662357.2,
+        1166397.8,
+        1229631.4
+      ]
+    },
+    "Dawn-Elysium": {
+      "baseline_ms": 101441.67,
+      "scale_ms": 1940166.3,
+      "exponent": 1.7,
+      "load_bin_penalty_ms": [
+        1817.8,
+        9202.0,
+        22678.7,
+        55497.7,
+        111659.4,
+        195156.9,
+        363428.4,
+        702467.5,
+        1583274.6,
+        1940166.3
+      ]
+    },
+    "Dawn-Fenix": {
+      "baseline_ms": 70691.14,
+      "scale_ms": 934350.4,
+      "exponent": 1.5,
+      "load_bin_penalty_ms": [
+        1359.4,
+        6859.8,
+        17302.6,
+        36123.9,
+        70592.5,
+        143758.7,
+        235103.9,
+        460381.1,
+        800302.0,
+        934350.4
+      ]
+    },
+    "Elysium-Fenix": {
+      "baseline_ms": 166454.57,
+      "scale_ms": 2129114.5,
+      "exponent": 1.5,
+      "load_bin_penalty_ms": [
+        2135.5,
+        12271.7,
+        38809.6,
+        83906.4,
+        182491.4,
+        318318.8,
+        535771.6,
+        1476679.2,
+        1779088.5,
+        2129114.5
+      ]
+    }
   },
-  "link_trust_priors": {
-    "Aegis-Boreas": 0.9383,
-    "Aegis-Dawn": 0.946,
-    "Aegis-Elysium": 0.05,
-    "Boreas-Dawn": 0.9381,
-    "Boreas-Elysium": 0.9422,
-    "Boreas-Fenix": 0.05,
-    "Caelum-Dawn": 0.9363,
-    "Caelum-Elysium": 0.9361,
-    "Caelum-Fenix": 0.9382,
-    "Dawn-Elysium": 0.9441,
-    "Dawn-Fenix": 0.9461,
-    "Elysium-Fenix": 0.948
+  "link_trust": {
+    "Aegis-Boreas": {
+      "prior": 0.9367,
+      "p95_gap": 0.0485,
+      "under_report_rate": 0.0155
+    },
+    "Aegis-Dawn": {
+      "prior": 0.9414,
+      "p95_gap": 0.0486,
+      "under_report_rate": 0.0053
+    },
+    "Aegis-Elysium": {
+      "prior": 0.05,
+      "p95_gap": 0.5214,
+      "under_report_rate": 0.7273
+    },
+    "Boreas-Dawn": {
+      "prior": 0.9359,
+      "p95_gap": 0.0487,
+      "under_report_rate": 0.0158
+    },
+    "Boreas-Elysium": {
+      "prior": 0.9386,
+      "p95_gap": 0.0487,
+      "under_report_rate": 0.0103
+    },
+    "Boreas-Fenix": {
+      "prior": 0.05,
+      "p95_gap": 0.5495,
+      "under_report_rate": 0.6951
+    },
+    "Caelum-Dawn": {
+      "prior": 0.9338,
+      "p95_gap": 0.049,
+      "under_report_rate": 0.0183
+    },
+    "Caelum-Elysium": {
+      "prior": 0.9344,
+      "p95_gap": 0.0488,
+      "under_report_rate": 0.0186
+    },
+    "Caelum-Fenix": {
+      "prior": 0.9374,
+      "p95_gap": 0.0482,
+      "under_report_rate": 0.0158
+    },
+    "Dawn-Elysium": {
+      "prior": 0.9414,
+      "p95_gap": 0.0482,
+      "under_report_rate": 0.0078
+    },
+    "Dawn-Fenix": {
+      "prior": 0.9437,
+      "p95_gap": 0.0479,
+      "under_report_rate": 0.0052
+    },
+    "Elysium-Fenix": {
+      "prior": 0.9478,
+      "p95_gap": 0.047,
+      "under_report_rate": 0.0026
+    }
   },
   "spoofed_links": [
     "Aegis-Elysium",
     "Boreas-Fenix"
   ],
-  "honest_noise_p95": 0.05,
-  "live_lie_gap_threshold": 0.15,
-  "targeting_jam_onset_share": 0.0868,
-  "targeting_steepness": 30.0,
-  "hold_out_from_tick": 400
+  "link_jam_priors": {
+    "Aegis-Boreas": 0.1168,
+    "Aegis-Dawn": 0.102,
+    "Aegis-Elysium": 0.0816,
+    "Boreas-Dawn": 0.084,
+    "Boreas-Elysium": 0.0898,
+    "Boreas-Fenix": 0.1,
+    "Caelum-Dawn": 0.05,
+    "Caelum-Elysium": 0.0729,
+    "Caelum-Fenix": 0.0943,
+    "Dawn-Elysium": 0.0648,
+    "Dawn-Fenix": 0.0757,
+    "Elysium-Fenix": 0.0663
+  },
+  "targeting": {
+    "share_bins": [
+      0,
+      0.03,
+      0.05,
+      0.07,
+      0.09,
+      0.11,
+      0.13,
+      0.16,
+      0.2,
+      0.3,
+      1.0
+    ],
+    "share_jam_rates": [
+      0.0556,
+      0.067,
+      0.0728,
+      0.0526,
+      0.0674,
+      0.0825,
+      0.1725,
+      0.1378,
+      0.1464,
+      0.1667
+    ]
+  },
+  "route_entropy_weight": 0.25,
+  "hold_out_from_tick": 400,
+  "validation_metrics": {
+    "congestion_pearson": 0.9564,
+    "congestion_mape": 0.7235,
+    "trust_spoof_avg": 0.086,
+    "trust_honest_avg": 0.8481,
+    "trust_honest_false_flag": 0.0,
+    "targeting_auc": 0.6854
+  }
 } as const;
 
 export type TrainedParams = typeof TRAINED_PARAMS;

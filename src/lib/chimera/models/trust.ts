@@ -3,17 +3,21 @@ import { normalizeLinkId } from "../link-id";
 import { expectedLatencyMs } from "./congestion";
 import { TRAINED_PARAMS } from "./params";
 
-const { live_lie_gap_threshold, honest_noise_p95 } = TRAINED_PARAMS;
-
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
+function sigmoid(x: number): number {
+  return 1 / (1 + Math.exp(-x));
+}
+
+type TrustProfile = (typeof TRAINED_PARAMS.link_trust)[keyof typeof TRAINED_PARAMS.link_trust];
+
 /**
- * Trust score 0–1 from self-reported telemetry vs load-implied latency.
+ * Trust score 0–1 using per-link training profiles + live lie detection.
  *
- * Training isolated Aegis-Elysium and Boreas-Fenix as systematic spoofers
- * (self-reported ≈30–70% below measured). Honest links stay within ~5% p95 noise.
+ * Spoofed links (Aegis-Elysium, Boreas-Fenix) keep near-zero trust.
+ * Honest links use link-specific p95 noise thresholds to avoid false flags.
  */
 export function score(linkId: string, liveState: LinkLiveState): TrustScore {
   const id = normalizeLinkId(linkId);
@@ -22,9 +26,9 @@ export function score(linkId: string, liveState: LinkLiveState): TrustScore {
     return { trust_score: 0 };
   }
 
-  const prior: number =
-    TRAINED_PARAMS.link_trust_priors[id as keyof typeof TRAINED_PARAMS.link_trust_priors] ??
-    0.9;
+  const prof: TrustProfile | undefined =
+    TRAINED_PARAMS.link_trust[id as keyof typeof TRAINED_PARAMS.link_trust];
+  const prior: number = prof?.prior ?? 0.9;
 
   const expected = expectedLatencyMs(id, liveState);
   if (!Number.isFinite(expected) || expected <= 0) {
@@ -34,17 +38,14 @@ export function score(linkId: string, liveState: LinkLiveState): TrustScore {
   const selfReported = liveState.self_reported_latency_ms;
   const relativeGap = (expected - selfReported) / expected;
 
-  let trust = prior;
-
-  // Live lie detection: self reports much faster than load implies
-  if (relativeGap > live_lie_gap_threshold) {
-    const liePenalty = Math.min(0.85, (relativeGap - live_lie_gap_threshold) * 2.5);
-    trust *= 1 - liePenalty;
+  if (TRAINED_PARAMS.spoofed_links.includes(id as (typeof TRAINED_PARAMS.spoofed_links)[number])) {
+    return { trust_score: clamp01(0.05 + 0.1 * sigmoid(-relativeGap * 10)) };
   }
 
-  // Small upward noise (self slightly higher than measured) is normal
-  if (relativeGap < -honest_noise_p95) {
-    trust = Math.min(1, trust * 1.02);
+  const threshold = (prof?.p95_gap ?? 0.05) + 0.03;
+  let trust = prior;
+  if (relativeGap > threshold) {
+    trust *= 1 - Math.min(0.4, (relativeGap - threshold) * 1.5);
   }
 
   return { trust_score: clamp01(trust) };

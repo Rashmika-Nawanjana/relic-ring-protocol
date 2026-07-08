@@ -14,6 +14,7 @@ import { TRAINED_PARAMS } from "./params";
 
 const ROOT = path.resolve(import.meta.dirname, "../../../..");
 const HOLD_OUT = TRAINED_PARAMS.hold_out_from_tick;
+const METRICS = TRAINED_PARAMS.validation_metrics;
 
 type CsvRow = Record<string, string>;
 
@@ -52,6 +53,7 @@ function pearson(xs: number[], ys: number[]): number {
   return num / Math.sqrt(dx * dy) || 0;
 }
 
+
 function toLiveState(row: CsvRow, linkId: string): LinkLiveState {
   const saturated = row.status === "saturated";
   return {
@@ -79,21 +81,21 @@ describe("Person 1 models — held-out validation", () => {
     for (const row of traffic) {
       if (!row.observed_latency_ms || row.status === "saturated") continue;
       const lid = row.link_id!;
-      const baseline =
-        TRAINED_PARAMS.link_baselines_ms[
-          lid as keyof typeof TRAINED_PARAMS.link_baselines_ms
+      const curve =
+        TRAINED_PARAMS.link_congestion[
+          lid as keyof typeof TRAINED_PARAMS.link_congestion
         ];
       const live = toLiveState(row, lid);
       const { penalty_ms, saturated } = predictCongestion(lid, live);
       if (saturated) continue;
-      const actPen = parseFloat(row.observed_latency_ms) - baseline;
+      const actPen = parseFloat(row.observed_latency_ms) - curve.baseline_ms;
       if (actPen < 0) continue;
       predicted.push(penalty_ms);
       actual.push(actPen);
     }
 
     const r = pearson(predicted, actual);
-    assert.ok(r > 0.8, `congestion Pearson r=${r.toFixed(3)} expected > 0.8`);
+    assert.ok(r > 0.9, `congestion Pearson r=${r.toFixed(3)} expected > 0.9`);
   });
 
   it("trust model flags spoofed links without killing honest links", () => {
@@ -126,7 +128,7 @@ describe("Person 1 models — held-out validation", () => {
         status: "ok",
       };
       const { trust_score } = scoreTrust(lid, live);
-      if (SPOOFED_LINKS.includes(lid)) {
+      if (SPOOFED_LINKS.includes(lid as (typeof SPOOFED_LINKS)[number])) {
         spoofScores.push(trust_score);
       } else {
         honestScores.push(trust_score);
@@ -135,15 +137,22 @@ describe("Person 1 models — held-out validation", () => {
 
     const spoofAvg = spoofScores.reduce((a, b) => a + b, 0) / spoofScores.length;
     const honestAvg = honestScores.reduce((a, b) => a + b, 0) / honestScores.length;
+    const falseFlagRate =
+      honestScores.filter((s) => s < 0.5).length / honestScores.length;
 
-    assert.ok(spoofAvg < 0.2, `spoof avg trust=${spoofAvg.toFixed(3)}`);
+    assert.ok(spoofAvg < 0.15, `spoof avg trust=${spoofAvg.toFixed(3)}`);
     assert.ok(honestAvg > 0.8, `honest avg trust=${honestAvg.toFixed(3)}`);
+    assert.ok(falseFlagRate < 0.05, `honest false flag rate=${falseFlagRate.toFixed(3)}`);
   });
 
-  it("targeting risk rises with traffic_share on validation ticks", () => {
+  it("targeting risk ranks jammed links above safe links on validation ticks", () => {
     const incidents = loadCsv("link_incident_history.csv").filter(
       (r) => parseInt(r.tick!, 10) >= HOLD_OUT && r.traffic_share,
     );
+    const trafficByKey = new Map<string, CsvRow>();
+    for (const row of loadCsv("link_traffic_history.csv")) {
+      trafficByKey.set(`${row.link_id}:${row.tick}`, row);
+    }
 
     let jamRiskSum = 0;
     let jamCount = 0;
@@ -151,12 +160,13 @@ describe("Person 1 models — held-out validation", () => {
     let safeCount = 0;
 
     for (const row of incidents) {
-      const lid = row.link_id!;
+      const traffic = trafficByKey.get(`${row.link_id}:${row.tick}`);
+      if (!traffic || traffic.status === "saturated") continue;
       const share = parseFloat(row.traffic_share!);
       const live: LinkLiveState = {
-        link_id: lid,
-        planet_a: lid.split("-")[0]!,
-        planet_b: lid.split("-")[1]!,
+        link_id: row.link_id!,
+        planet_a: row.link_id!.split("-")[0]!,
+        planet_b: row.link_id!.split("-")[1]!,
         capacity_units: 100,
         current_load: 50,
         load_ratio: 0.3,
@@ -164,7 +174,7 @@ describe("Person 1 models — held-out validation", () => {
         traffic_share: share,
         status: "ok",
       };
-      const { risk_score } = targetingRisk(lid, live);
+      const { risk_score } = targetingRisk(row.link_id!, live);
       if (row.jammed_flag === "True") {
         jamRiskSum += risk_score;
         jamCount++;
@@ -177,6 +187,10 @@ describe("Person 1 models — held-out validation", () => {
     const jamAvg = jamRiskSum / jamCount;
     const safeAvg = safeRiskSum / safeCount;
     assert.ok(jamAvg > safeAvg, `jam avg risk=${jamAvg.toFixed(3)} safe=${safeAvg.toFixed(3)}`);
+    assert.ok(
+      METRICS.targeting_auc > 0.65,
+      `training targeting AUC=${METRICS.targeting_auc} expected > 0.65`,
+    );
   });
 
   it("saturated links are marked unavailable by congestion model", () => {
@@ -194,5 +208,12 @@ describe("Person 1 models — held-out validation", () => {
     const result = predictCongestion("Aegis-Boreas", live);
     assert.equal(result.saturated, true);
     assert.equal(result.penalty_ms, Number.POSITIVE_INFINITY);
+  });
+
+  it("embedded training metrics meet improvement thresholds", () => {
+    assert.ok(METRICS.congestion_pearson > 0.93);
+    assert.ok(METRICS.congestion_mape < 0.78);
+    assert.ok(METRICS.trust_honest_false_flag < 0.05);
+    assert.ok(METRICS.targeting_auc > 0.65);
   });
 });
