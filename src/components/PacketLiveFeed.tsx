@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useUniverse } from "@/context/UniverseContext";
 import { buildPlanetTowerRoutes } from "@/lib/universe/packet-path";
 import {
@@ -42,13 +42,13 @@ export function PacketLiveFeed() {
     isSending,
     packetTransmitKey,
     packetLegRef,
+    packetProgressRef,
     packetResumeProgress,
     rerouteNotice,
     packetHeld,
     heldAtPlanet,
   } = useUniverse();
   const [live, setLive] = useState<PacketLiveSnapshot>(IDLE);
-  const progressRef = useRef(0);
 
   const encodingsByPlanet = useMemo(() => {
     const map = new Map<string, { encoding: string; base: number }>();
@@ -78,32 +78,44 @@ export function PacketLiveFeed() {
     }
 
     if (!routeResult?.ok || route.length < 2) {
-      progressRef.current = 0;
+      packetProgressRef.current = 0;
       packetLegRef.current = 0;
       setLive(IDLE);
       return;
     }
 
     // Resume mid-path after a chaos reroute; 0 on a fresh transmit
-    progressRef.current = packetResumeProgress;
+    packetProgressRef.current = packetResumeProgress;
     let raf = 0;
     let last = performance.now();
     const pathLen = estimatePathLength(route.length);
 
     const tick = (now: number) => {
-      if (packetHeld) {
+      if (packetHeld && heldAtPlanet) {
         last = now;
+        setLive({
+          phase: "held",
+          progress: 0,
+          legIndex: 0,
+          legProgress: 0,
+          hopIndex: 0,
+          planet: heldAtPlanet,
+          tower: null,
+          nextPlanet: null,
+          encoding: null,
+          encodingBase: null,
+        });
         raf = requestAnimationFrame(tick);
         return;
       }
 
       const delta = (now - last) / 1000;
       last = now;
-      progressRef.current += delta * (0.45 / pathLen);
-      if (progressRef.current >= 1) progressRef.current %= 1;
+      packetProgressRef.current += delta * (0.45 / pathLen);
+      if (packetProgressRef.current >= 1) packetProgressRef.current %= 1;
 
       const snapshot = packetLegAtProgress(
-        progressRef.current,
+        packetProgressRef.current,
         route,
         towerRoutes,
         encodingsByPlanet,
@@ -131,7 +143,7 @@ export function PacketLiveFeed() {
   const statusLabel = isSending
     ? "Computing route"
     : packetHeld
-      ? `Held at ${heldAtPlanet ?? "planet"} — retrying`
+      ? `Orbiting ${heldAtPlanet ?? "planet"} — waiting for safe route`
       : hasRoute
         ? PHASE_LABEL[live.phase]
         : "No active route";

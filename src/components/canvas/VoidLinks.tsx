@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Line } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
@@ -9,7 +9,6 @@ import { planetSpinY } from "@/lib/solar-system/spin";
 import {
   buildAnimatedPacketPath,
   buildPlanetTowerRoutes,
-  pathLength,
   sampleAlongPath,
   towerTipWorld,
 } from "@/lib/universe/packet-path";
@@ -166,13 +165,8 @@ function ActiveRouteVisuals({
   const pulseRef = useRef<THREE.Mesh>(null);
   const haloRef = useRef<THREE.Mesh>(null);
   const lightRef = useRef<THREE.PointLight>(null);
-  const progress = useRef(0);
-  const { packetResumeProgress, packetTransmitKey } = useUniverse();
-
-  // Resume mid-path after a chaos reroute instead of restarting from origin
-  useEffect(() => {
-    progress.current = packetResumeProgress;
-  }, [route, packetResumeProgress, packetTransmitKey]);
+  const { packetProgressRef, packetHeld, heldAtPlanet } = useUniverse();
+  const heldAngle = useRef(0);
 
   const nodeMap = useMemo(
     () => new Map(config.nodes.map((n) => [n.id, n])),
@@ -190,6 +184,29 @@ function ActiveRouteVisuals({
   );
 
   useFrame((state, delta) => {
+    if (!pulseRef.current) return;
+
+    // When held at a planet, orbit the packet around it visually
+    if (packetHeld && heldAtPlanet) {
+      const planet = planetMap.get(heldAtPlanet);
+      if (planet) {
+        heldAngle.current += delta * 2.5;
+        const orbitR = planet.visualRadius * 1.35;
+        const cx = planet.position[0];
+        const cy = planet.position[1];
+        const cz = planet.position[2];
+        const pos = new THREE.Vector3(
+          cx + Math.cos(heldAngle.current) * orbitR,
+          cy + Math.sin(heldAngle.current * 0.7) * orbitR * 0.3,
+          cz + Math.sin(heldAngle.current) * orbitR,
+        );
+        pulseRef.current.position.copy(pos);
+        haloRef.current?.position.copy(pos);
+        lightRef.current?.position.copy(pos);
+      }
+      return;
+    }
+
     const spinByPlanet = new Map<string, number>();
     for (const p of planets) {
       const focused =
@@ -207,11 +224,9 @@ function ActiveRouteVisuals({
       spinByPlanet,
     );
 
-    if (path.length < 2 || !pulseRef.current) return;
+    if (path.length < 2) return;
 
-    const len = pathLength(path);
-    progress.current += delta * (0.45 / Math.max(len * 0.08, 0.35));
-    const pos = sampleAlongPath(path, progress.current);
+    const pos = sampleAlongPath(path, packetProgressRef.current);
 
     pulseRef.current.position.copy(pos);
     haloRef.current?.position.copy(pos);

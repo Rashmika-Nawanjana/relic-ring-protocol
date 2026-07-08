@@ -220,43 +220,38 @@ export async function runCopilotAgent(
     if (unsafe) excluded.add(linkId);
   }
 
-  let chosenPath = baselinePath;
-
-  const baselineBlocked = baselinePath.some((_, i, arr) => {
-    if (i === arr.length - 1) return false;
-    return excluded.has(canonicalLinkId(arr[i]!, arr[i + 1]!));
+  // Always use Chimera-weighted Dijkstra so the chosen path reflects
+  // live congestion, trust, and targeting costs — not just physics.
+  const rerouted = findChimeraRoute(config, origin_id, destination_id, {
+    killed,
+    killedLinks,
+    excludedLinks: excluded,
+    trafficHistory,
+    liveStates,
   });
 
-  if (excluded.size > 0 || baselineBlocked) {
-    const rerouted = findChimeraRoute(config, origin_id, destination_id, {
-      killed,
-      killedLinks,
-      excludedLinks: excluded,
-      trafficHistory,
-      liveStates,
-    });
-    if (!rerouted) {
-      return {
-        ok: false,
-        error:
-          "Undeliverable — Chimera saturation or trust failures block all routes within Lmax.",
-      };
-    }
-    chosenPath = rerouted;
+  if (!rerouted) {
+    return {
+      ok: false,
+      error:
+        "Undeliverable — Chimera saturation or trust failures block all routes within Lmax.",
+    };
+  }
 
-    // Re-run diagnostics on new hops so the log covers the executed path
-    if (chosenPath.join("→") !== baselinePath.join("→")) {
-      for (let i = 0; i < chosenPath.length - 1; i++) {
-        evaluateHop(
-          config,
-          chosenPath[i]!,
-          chosenPath[i + 1]!,
-          liveStates,
-          trafficHistory,
-          "reroute",
-          agentLog,
-        );
-      }
+  const chosenPath = rerouted;
+
+  // Re-run diagnostics on new hops so the log covers the executed path
+  if (chosenPath.join("→") !== baselinePath.join("→")) {
+    for (let i = 0; i < chosenPath.length - 1; i++) {
+      evaluateHop(
+        config,
+        chosenPath[i]!,
+        chosenPath[i + 1]!,
+        liveStates,
+        trafficHistory,
+        "reroute",
+        agentLog,
+      );
     }
   }
 

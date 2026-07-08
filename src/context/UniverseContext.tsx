@@ -69,6 +69,8 @@ type UniverseContextValue = {
   trafficHistory: string[];
   /** Written by PacketLiveFeed each frame — current leg index of the in-flight packet. */
   packetLegRef: MutableRefObject<number>;
+  /** Shared animation progress (0–1), driven by PacketLiveFeed, read by VoidLinks 3D. */
+  packetProgressRef: MutableRefObject<number>;
   /** Fraction (0–1) the packet animation should resume from after a mid-flight reroute. */
   packetResumeProgress: number;
   /** Chaos-test notice shown when a severed link forced a live pivot. */
@@ -130,6 +132,7 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
   const [heldAtPlanet, setHeldAtPlanet] = useState<string | null>(null);
   const hopCheckInFlight = useRef(false);
   const packetLegRef = useRef(0);
+  const packetProgressRef = useRef(0);
 
   const edges = useMemo(
     () => buildVoidEdges(config, killed, killedLinks),
@@ -245,34 +248,28 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
     [config, killed, killedLinks, route, routeResult, lastMessage, clearRoute],
   );
 
-  // ── Hop-by-hop gate (B+C approach) ───────────────────────────────
-  // Each time the Chimera panel polls a new tick while a packet is in
-  // flight, check whether the **next** void hop on the current route is
-  // still safe.  If it isn't:
-  //   1. Try to reroute from the current planet to the same destination.
-  //   2. If no alternative path → hold the packet at the current planet
-  //      and retry on the next tick.
+  // ── Live Chimera gate ────────────────────────────────────────────
+  // Every time ChimeraPanel polls a new tick, scan ALL links on the
+  // active route.  If any are "danger", ask CoPilot for a fresh
+  // origin→destination path.  The packet animation keeps looping and
+  // switches to the new path immediately — judges see the route update
+  // live as Chimera conditions change.
   useEffect(() => {
     if (route.length < 2 || !routeResult?.ok) return;
+    if (hopCheckInFlight.current) return;
+
+    const origin = route[0]!;
+    const destination = route[route.length - 1]!;
+
+    // ── Retry: packet is held — see if a safe path opened ──
     if (packetHeld) {
-      // ── Retry logic (C): packet is held — see if a safe path opened ──
-      if (!heldAtPlanet) return;
-      if (hopCheckInFlight.current) return;
       hopCheckInFlight.current = true;
 
-      const destination = route[route.length - 1]!;
-      if (heldAtPlanet === destination) {
-        setPacketHeld(false);
-        setHeldAtPlanet(null);
-        hopCheckInFlight.current = false;
-        return;
-      }
-
-      fetch(`/api/copilot`, {
+      fetch("/api/copilot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          origin: heldAtPlanet,
+          origin: heldAtPlanet ?? origin,
           destination,
           message: lastMessage,
           killed: [...killed],
@@ -284,109 +281,99 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
         .then((data) => {
           if (!data.ok) return;
 
-          const traveledIdx = route.indexOf(heldAtPlanet);
-          const traveled = traveledIdx >= 0 ? route.slice(0, traveledIdx) : [];
-          const newRoute = [...traveled, ...data.chosen_path];
-
+          const newRoute: string[] = data.chosen_path;
           const trace = traceFixedRoute(config, newRoute, lastMessage, killed, killedLinks);
           if (!trace.ok) return;
 
           setRoute(newRoute);
           setRouteResult(trace);
-          const resumeAt = traveled.length / (newRoute.length - 1);
-          setPacketResumeProgress(resumeAt);
+          setPacketResumeProgress(0);
           setPacketTransmitKey((k) => k + 1);
           setPacketHeld(false);
           setHeldAtPlanet(null);
           setRerouteNotice(
-            `Held at ${heldAtPlanet} — path cleared, resumed via ${data.chosen_path.slice(1).join(" → ")}.`,
+            `Path cleared — resumed via ${newRoute.join(" → ")}.`,
           );
         })
         .catch(() => {})
         .finally(() => {
           hopCheckInFlight.current = false;
         });
-
       return;
     }
 
-    // ── Gate logic (B): check next hop ──
-    const legs = route.length - 1;
-    const currentLeg = Math.max(0, Math.min(packetLegRef.current, legs - 1));
-    const nextHopIdx = currentLeg;
-    if (nextHopIdx >= legs) return;
+    // ── Scan: any link on the route in "danger"? ──
+    let dangerLinkId: string | null = null;
+    for (let i = 0; i < route.length - 1; i++) {
+      const id = [route[i]!, route[i + 1]!].sort().join("-");
+      if (linkHealthMap.get(id) === "danger") {
+        dangerLinkId = id;
+        break;
+      }
+    }
+    if (!dangerLinkId) return;
 
-    const from = route[nextHopIdx]!;
-    const to = route[nextHopIdx + 1]!;
-    const linkId = [from, to].sort().join("-");
-
-    const health = linkHealthMap.get(linkId);
-    if (health === "ok" || health === "congested") return;
-    if (health !== "danger") return;
-
-    // Next hop is danger — check server for definitive answer
-    if (hopCheckInFlight.current) return;
+    // ── Reroute: full origin → destination via CoPilot ──
     hopCheckInFlight.current = true;
 
-    fetch(`/api/chimera/check-hop?link=${encodeURIComponent(linkId)}`)
+    fetch("/api/copilot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        origin,
+        destination,
+        message: lastMessage,
+        killed: [...killed],
+        killed_links: [...killedLinks],
+        traffic_history: trafficHistory,
+      }),
+    })
       .then((r) => r.json())
       .then((data) => {
-        if (!data.ok || data.safe) return;
+        if (!data.ok) {
+          setPacketHeld(true);
+          setHeldAtPlanet(origin);
+          setRerouteNotice(
+            `Chimera blocked ${dangerLinkId} — no safe route. Packet held, retrying…`,
+          );
+          return;
+        }
 
-        const destination = route[route.length - 1]!;
-        const pivot = from;
+        const newRoute: string[] = data.chosen_path;
 
-        if (pivot === destination) return;
+        // Skip if CoPilot picked the same path (avoid animation restart)
+        if (
+          newRoute.length === route.length &&
+          newRoute.every((p, i) => p === route[i])
+        ) {
+          return;
+        }
 
-        // Try reroute from current planet to destination
-        return fetch("/api/copilot", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            origin: pivot,
-            destination,
-            message: lastMessage,
-            killed: [...killed],
-            killed_links: [...killedLinks],
-            exclude_links: [linkId],
-            traffic_history: trafficHistory,
-          }),
-        })
-          .then((r) => r.json())
-          .then((reroute) => {
-            const traveled = route.slice(0, nextHopIdx);
+        const trace = traceFixedRoute(config, newRoute, lastMessage, killed, killedLinks);
+        if (!trace.ok) {
+          setPacketHeld(true);
+          setHeldAtPlanet(origin);
+          setRerouteNotice(
+            `Chimera blocked ${dangerLinkId} — reroute trace failed, holding.`,
+          );
+          return;
+        }
 
-            if (!reroute.ok) {
-              // No alternative → hold (C)
-              setPacketHeld(true);
-              setHeldAtPlanet(pivot);
-              setRerouteNotice(
-                `Chimera blocked ${linkId} — packet held at ${pivot}. ${data.reason ?? "Link unsafe"}. Retrying each tick…`,
-              );
-              return;
-            }
-
-            // Reroute to same destination (B)
-            const newRoute = [...traveled, ...reroute.chosen_path];
-            const trace = traceFixedRoute(config, newRoute, lastMessage, killed, killedLinks);
-            if (!trace.ok) {
-              setPacketHeld(true);
-              setHeldAtPlanet(pivot);
-              setRerouteNotice(
-                `Chimera blocked ${linkId} — reroute trace failed, holding at ${pivot}.`,
-              );
-              return;
-            }
-
-            setRoute(newRoute);
-            setRouteResult(trace);
-            const resumeAt = traveled.length / (newRoute.length - 1);
-            setPacketResumeProgress(resumeAt);
-            setPacketTransmitKey((k) => k + 1);
-            setRerouteNotice(
-              `Chimera tick update: ${linkId} unsafe (${data.reason}). Pivoted at ${pivot} → ${reroute.chosen_path.slice(1).join(" → ")}.`,
-            );
-          });
+        setRoute(newRoute);
+        setRouteResult(trace);
+        setPacketResumeProgress(0);
+        setPacketTransmitKey((k) => k + 1);
+        setCopilotReport({
+          origin_id: origin,
+          destination_id: destination,
+          chosen_path: newRoute,
+          link_evaluations: data.link_evaluations ?? [],
+          final_latency_estimate_ms: data.final_latency_estimate_ms ?? 0,
+          explanation: data.explanation ?? "",
+        });
+        setRerouteNotice(
+          `Chimera update: ${dangerLinkId} unsafe → rerouted via ${newRoute.join(" → ")}.`,
+        );
       })
       .catch(() => {})
       .finally(() => {
@@ -517,6 +504,7 @@ export function UniverseProvider({ children }: { children: ReactNode }) {
         chimeraTick,
         trafficHistory,
         packetLegRef,
+        packetProgressRef,
         packetResumeProgress,
         rerouteNotice,
         packetHeld,
