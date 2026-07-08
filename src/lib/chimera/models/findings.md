@@ -72,13 +72,53 @@ Chimera jams links carrying a larger slice of network traffic.
 congestion.predict(link_id, live_state) → { penalty_ms, saturated: boolean }
 trust.score(link_id, live_state) → { trust_score: 0–1 }
 targeting.risk(link_id, live_state, our_traffic_history?) → { risk_score: 0–1 }
+scoreLink(link_id, live_state, history?) → ModelScores
+evaluateLink(link_id, live_state, physics_baseline_ms, history?) → LinkEvaluation
 ```
+
+**Agent tools** (sequential per-hop diagnostics):
+
+```typescript
+congestionTool(link_id, live_state)
+trustTool(link_id, live_state)
+targetingTool(link_id, live_state, our_traffic_history?)
+runDiagnosticTools(link_id, live_state, our_traffic_history?)
+```
+
+**Combined cost** (for true-cost Dijkstra):
+
+```
+combined_cost = physics
+  + congestion_penalty
+  + (1 - trust_score) × physics × 0.5
+  + targeting_risk_score × physics × 0.3
+```
+
+Saturated links → `combined_cost = Infinity`.
 
 Import from `@/lib/chimera/models`.
 
 ---
 
-## 5. Validation (ticks 400–499)
+## 5. Decision Audit API
+
+For live cross-examination, call:
+
+```typescript
+evaluateLinkWithExplanation(link_id, live_state, physics_baseline_ms, history?)
+```
+
+Returns `{ evaluation, explanation }` where `explanation` has human-readable strings for congestion, trust, targeting, and combined_cost breakdown.
+
+Example audit line for **Aegis-Elysium** at `load_ratio=0.59`, `self_reported=40s`:
+- Trust prior 0.05 (systematic spoofer) + live lie gap → trust ≈ 0.05
+- Congestion penalty from load curve
+- Targeting risk from 11% traffic_share
+- Combined cost = physics + penalties + trust/risk adjustments
+
+---
+
+## 6. Validation (ticks 400–499)
 
 Run: `npm run test:models`
 
@@ -90,7 +130,7 @@ Run: `npm run test:models`
 
 ---
 
-## 6. Rules reminder
+## 7. Rules reminder
 
 - Do **not** train on live `/state` during build days (scrambled values).
 - Treat `saturated` + `null` self-reported as **unavailable**, not zero latency.

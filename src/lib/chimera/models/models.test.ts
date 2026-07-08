@@ -11,6 +11,8 @@ import { predict as predictCongestion } from "./congestion";
 import { score as scoreTrust, SPOOFED_LINKS } from "./trust";
 import { risk as targetingRisk } from "./targeting";
 import { TRAINED_PARAMS } from "./params";
+import { evaluateLink, runDiagnosticTools, scoreLink } from "./index";
+import { explainLinkEvaluation } from "./explain";
 
 const ROOT = path.resolve(import.meta.dirname, "../../../..");
 const HOLD_OUT = TRAINED_PARAMS.hold_out_from_tick;
@@ -194,5 +196,79 @@ describe("Person 1 models — held-out validation", () => {
     const result = predictCongestion("Aegis-Boreas", live);
     assert.equal(result.saturated, true);
     assert.equal(result.penalty_ms, Number.POSITIVE_INFINITY);
+  });
+
+  it("evaluateLink produces unified link_evaluations row", () => {
+    const live: LinkLiveState = {
+      link_id: "Aegis-Boreas",
+      planet_a: "Aegis",
+      planet_b: "Boreas",
+      capacity_units: 208,
+      current_load: 50,
+      load_ratio: 0.24,
+      self_reported_latency_ms: 58_000,
+      traffic_share: 0.05,
+      status: "ok",
+    };
+    const row = evaluateLink("Aegis-Boreas", live, 60_195);
+    assert.equal(row.link_id, "Aegis-Boreas");
+    assert.ok(row.trust_score > 0.8);
+    assert.ok(row.combined_cost > 60_195);
+    assert.ok(Number.isFinite(row.predicted_congestion_penalty_ms));
+  });
+
+  it("evaluateLink marks saturated links as infinite combined_cost", () => {
+    const live: LinkLiveState = {
+      link_id: "Aegis-Boreas",
+      planet_a: "Aegis",
+      planet_b: "Boreas",
+      capacity_units: 208,
+      current_load: 200,
+      load_ratio: 0.95,
+      self_reported_latency_ms: null,
+      traffic_share: 0.1,
+      status: "saturated",
+    };
+    const row = evaluateLink("Aegis-Boreas", live, 60_195);
+    assert.equal(row.combined_cost, Number.POSITIVE_INFINITY);
+    assert.equal(row.trust_score, 0);
+  });
+
+  it("diagnostic tools match scoreLink outputs", () => {
+    const live: LinkLiveState = {
+      link_id: "Aegis-Elysium",
+      planet_a: "Aegis",
+      planet_b: "Elysium",
+      capacity_units: 202,
+      current_load: 120,
+      load_ratio: 0.59,
+      self_reported_latency_ms: 40_000,
+      traffic_share: 0.11,
+      status: "ok",
+    };
+    const tools = runDiagnosticTools("Aegis-Elysium", live, ["Aegis-Elysium"]);
+    const scores = scoreLink("Aegis-Elysium", live, ["Aegis-Elysium"]);
+    assert.equal(tools.congestion.saturated, false);
+    assert.ok(tools.trust.trust_score < 0.3);
+    assert.equal(scores.trust_score, tools.trust.trust_score);
+    assert.equal(scores.targeting_risk_score, tools.targeting.risk_score);
+  });
+
+  it("explainLinkEvaluation returns audit strings for spoofed link", () => {
+    const live: LinkLiveState = {
+      link_id: "Boreas-Fenix",
+      planet_a: "Boreas",
+      planet_b: "Fenix",
+      capacity_units: 169,
+      current_load: 90,
+      load_ratio: 0.53,
+      self_reported_latency_ms: 50_000,
+      traffic_share: 0.12,
+      status: "ok",
+    };
+    const exp = explainLinkEvaluation("Boreas-Fenix", live, 136_357);
+    assert.match(exp.trust, /spoofer|prior=0\.05/i);
+    assert.ok(exp.summary.includes("Boreas-Fenix"));
+    assert.ok(exp.combined_cost.includes("physics"));
   });
 });

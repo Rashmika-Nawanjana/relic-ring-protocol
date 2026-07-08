@@ -32,3 +32,12 @@ export type ModelScores = {
 
 /** Recent link_ids our router chose — optional entropy input for targeting. */
 export type TrafficHistory = string[];
+
+/** One row in the mandatory Phase 2 `link_evaluations[]` report. */
+export type LinkEvaluation = {
+  link_id: string;
+  predicted_congestion_penalty_ms: number;
+  trust_score: number;
+  targeting_risk_score: number;
+  combined_cost: number;
+};
