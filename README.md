@@ -50,7 +50,7 @@ See [problem.md](./problem.md) for the full spec and [Equations.md](./Equations.
 
 ## Configuration
 
-All planetary values come from **`universe-config.json`** at the repo root — nothing is hardcoded per planet.
+All planetary values come from **`challenge/universe-config.json`** (Phase 2 extended config with `interplanetary_links[]`) — nothing is hardcoded per planet. Planet vocabulary for the NL parser is derived from `nodes[]` at runtime.
 
 | Field | Source | Role |
 |-------|--------|------|

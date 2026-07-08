@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Line } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
@@ -167,6 +167,12 @@ function ActiveRouteVisuals({
   const haloRef = useRef<THREE.Mesh>(null);
   const lightRef = useRef<THREE.PointLight>(null);
   const progress = useRef(0);
+  const { packetResumeProgress, packetTransmitKey } = useUniverse();
+
+  // Resume mid-path after a chaos reroute instead of restarting from origin
+  useEffect(() => {
+    progress.current = packetResumeProgress;
+  }, [route, packetResumeProgress, packetTransmitKey]);
 
   const nodeMap = useMemo(
     () => new Map(config.nodes.map((n) => [n.id, n])),

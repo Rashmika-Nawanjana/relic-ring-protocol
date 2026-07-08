@@ -11,6 +11,7 @@ import { runCopilotAgent } from "./agent";
 import { validateCopilotReport } from "./schema";
 
 const config = loadUniverseConfig();
+const planetIds = config.nodes.map((n) => n.id);
 
 function okLink(
   linkId: string,
@@ -41,7 +42,10 @@ function buildCleanLiveMap(): Map<string, LinkLiveState> {
 
 describe("Person 2 CoPilot", () => {
   it("parses natural-language routing requests", () => {
-    const r = parseNaturalLanguageRequest("Send Caelum to Aegis: Hello world");
+    const r = parseNaturalLanguageRequest(
+      "Send Caelum to Aegis: Hello world",
+      planetIds,
+    );
     assert.equal(r.ok, true);
     if (r.ok) {
       assert.equal(r.request.origin_id, "Caelum");
@@ -51,11 +55,14 @@ describe("Person 2 CoPilot", () => {
   });
 
   it("parses structured copilot input", () => {
-    const r = parseCopilotInput({
-      origin: "Aegis",
-      destination: "Caelum",
-      message: "ping",
-    });
+    const r = parseCopilotInput(
+      {
+        origin: "Aegis",
+        destination: "Caelum",
+        message: "ping",
+      },
+      planetIds,
+    );
     assert.equal(r.ok, true);
     if (r.ok) assert.equal(r.request.message, "ping");
   });
@@ -124,6 +131,51 @@ describe("Person 2 CoPilot", () => {
       );
       if (row) {
         assert.ok(row.trust_score < 0.2);
+      }
+    }
+  });
+
+  it("logs one tool step per baseline hop (sequential agent evidence)", async () => {
+    const result = await runCopilotAgent(
+      config,
+      { origin_id: "Aegis", destination_id: "Caelum", message: "test" },
+      { liveStates: buildCleanLiveMap() },
+    );
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      const baselineSteps = result.agent_log.filter((s) => s.phase === "baseline");
+      assert.ok(baselineSteps.length >= 1, "expected baseline tool steps");
+      for (const step of baselineSteps) {
+        assert.equal(typeof step.trust_score, "number");
+        assert.equal(typeof step.targeting_risk_score, "number");
+        assert.ok(step.verdict === "cleared" || step.verdict === "rejected");
+      }
+      assert.ok(result.audit.length === result.report.chosen_path.length - 1);
+    }
+  });
+
+  it("flags anomalous telemetry as uncertainty instead of mis-scoring it", async () => {
+    const live = buildCleanLiveMap();
+    live.set(
+      "Aegis-Elysium",
+      okLink("Aegis-Elysium", { load_ratio: 7.3 }), // outside trained [0,1] domain
+    );
+
+    const result = await runCopilotAgent(
+      config,
+      { origin_id: "Aegis", destination_id: "Elysium", message: "test" },
+      { liveStates: live },
+    );
+
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.ok(result.anomalies.some((a) => a.link_id === "Aegis-Elysium"));
+      assert.match(result.report.explanation, /Uncertainty flagged|anomalous/i);
+      // Anomalous link must not be on the chosen path
+      for (let i = 0; i < result.report.chosen_path.length - 1; i++) {
+        const a = result.report.chosen_path[i]!;
+        const b = result.report.chosen_path[i + 1]!;
+        assert.notEqual([a, b].sort().join("-"), "Aegis-Elysium");
       }
     }
   });

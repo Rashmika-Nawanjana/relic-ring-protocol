@@ -1,5 +1,8 @@
 import type { LinkEvaluation } from "@/lib/chimera/types";
+import type { LiveAnomaly } from "@/lib/chimera/anomaly";
+import type { LinkEvaluationExplanation } from "@/lib/chimera/models/explain";
 import { canonicalLinkId, normalizeLinkId } from "@/lib/chimera/link-id";
+import type { AgentLogStep } from "./agent";
 
 /** Mandatory Phase 2 unified routing report (phase2.md). */
 export type CopilotReport = {
@@ -16,7 +19,19 @@ export type CopilotError = {
   error: string;
 };
 
-export type CopilotResult = { ok: true; report: CopilotReport } | CopilotError;
+/**
+ * Agent result: the mandated report plus demo/audit metadata kept OUTSIDE
+ * the unified schema (judges' report object stays byte-exact).
+ */
+export type CopilotResult =
+  | {
+      ok: true;
+      report: CopilotReport;
+      agent_log: AgentLogStep[];
+      anomalies: LiveAnomaly[];
+      audit: LinkEvaluationExplanation[];
+    }
+  | CopilotError;
 
 export function isCopilotReport(value: unknown): value is CopilotReport {
   if (!value || typeof value !== "object") return false;

@@ -1,6 +1,11 @@
 import type { LinkLiveState, TrafficHistory } from "@/lib/chimera/types";
 import { canonicalLinkId } from "@/lib/chimera/link-id";
 import { isKnownSpoofedLink } from "@/lib/chimera/models";
+import {
+  explainLinkEvaluation,
+  type LinkEvaluationExplanation,
+} from "@/lib/chimera/models/explain";
+import { detectLiveAnomalies, type LiveAnomaly } from "@/lib/chimera/anomaly";
 import { refreshLiveState, saturatedLinkIds } from "@/lib/chimera/state-cache";
 import { findRoute } from "@/lib/universe/router";
 import type { UniverseConfig } from "@/lib/universe/types";
@@ -31,11 +36,27 @@ export type AgentOptions = {
   liveStates?: Map<string, LinkLiveState>;
 };
 
+/** One sequential agent step: pause at a node, run the 3 diagnostic tools. */
+export type AgentLogStep = {
+  step: number;
+  phase: "baseline" | "reroute";
+  at_node: string;
+  next_node: string;
+  link_id: string;
+  congestion_penalty_ms: number;
+  saturated: boolean;
+  trust_score: number;
+  targeting_risk_score: number;
+  verdict: "cleared" | "rejected";
+  reason: string | null;
+};
+
 function buildExplanation(
   path: string[],
   evaluations: CopilotReport["link_evaluations"],
   baselinePath: string[],
   excluded: Set<string>,
+  anomalies: LiveAnomaly[],
 ): string {
   const parts: string[] = [];
 
@@ -61,6 +82,16 @@ function buildExplanation(
     }
   }
 
+  if (anomalies.length > 0) {
+    const flagged = anomalies
+      .slice(0, 3)
+      .map((a) => `${a.link_id || "network"} (${a.reason})`)
+      .join("; ");
+    parts.push(
+      `Uncertainty flagged — anomalous telemetry outside trained range: ${flagged}${anomalies.length > 3 ? ` and ${anomalies.length - 3} more` : ""}. Affected links treated as unavailable.`,
+    );
+  }
+
   if (excluded.size > 0) {
     parts.push(`Excluded links: ${[...excluded].join(", ")}.`);
   }
@@ -74,11 +105,59 @@ function buildExplanation(
   return parts.join(" ");
 }
 
+/** Evaluate one hop with all 3 tools, append to the agent log, return safety. */
+function evaluateHop(
+  config: UniverseConfig,
+  a: string,
+  b: string,
+  liveStates: Map<string, LinkLiveState>,
+  trafficHistory: TrafficHistory,
+  phase: AgentLogStep["phase"],
+  log: AgentLogStep[],
+): { linkId: string; unsafe: boolean } {
+  const linkId = linkIdForHop(a, b);
+  const live = liveStates.get(linkId);
+  const state = live ?? makeMissingState(linkId);
+  const voidPhysics = voidHopPhysicsMs(config, a, b);
+
+  const tools = runDiagnosticTools(linkId, state, trafficHistory);
+  const unsafe = isLinkUnsafe(linkId, live, voidPhysics, trafficHistory);
+
+  let reason: string | null = null;
+  if (unsafe) {
+    if (!live) reason = "No live telemetry — treated as unavailable";
+    else if (state.status === "saturated" || state.self_reported_latency_ms === null)
+      reason = "Saturated (null self-reported latency) — hard failure, not zero latency";
+    else if (tools.trust.trust_score < 0.2)
+      reason = `Trust ${tools.trust.trust_score.toFixed(2)} below 0.20 threshold (spoof suspected)`;
+    else reason = "Combined cost infinite (congestion saturation)";
+  }
+
+  log.push({
+    step: log.length + 1,
+    phase,
+    at_node: a,
+    next_node: b,
+    link_id: linkId,
+    congestion_penalty_ms: tools.congestion.saturated
+      ? Number.POSITIVE_INFINITY
+      : tools.congestion.penalty_ms,
+    saturated: tools.congestion.saturated,
+    trust_score: tools.trust.trust_score,
+    targeting_risk_score: tools.targeting.risk_score,
+    verdict: unsafe ? "rejected" : "cleared",
+    reason,
+  });
+
+  return { linkId, unsafe };
+}
+
 /**
  * Sequential CoPilot agent:
  * 1. Baseline physics route
- * 2. Per-hop diagnostic tools on baseline
- * 3. Reroute with true-cost graph when any hop is unsafe
+ * 2. Per-hop diagnostic tools on baseline (each step logged)
+ * 3. Anomaly guard on live telemetry (unseen-vector safety)
+ * 4. Reroute with true-cost graph when any hop is unsafe, re-evaluating new hops
  */
 export async function runCopilotAgent(
   config: UniverseConfig,
@@ -103,8 +182,13 @@ export async function runCopilotAgent(
     : await refreshLiveState(true);
   const liveStates = liveEntry.links;
 
+  const anomalies = detectLiveAnomalies(liveStates, config);
+  const anomalousLinks = new Set(
+    anomalies.map((a) => a.link_id).filter((id) => id.length > 0),
+  );
+
   const saturated = saturatedLinkIds(liveStates);
-  const excluded = new Set([...excludeLinks, ...saturated]);
+  const excluded = new Set([...excludeLinks, ...saturated, ...anomalousLinks]);
 
   const baseline = findRoute(
     config,
@@ -120,29 +204,30 @@ export async function runCopilotAgent(
   }
 
   const baselinePath = baseline.route;
+  const agentLog: AgentLogStep[] = [];
 
-  // Sequential evaluation on baseline hops
+  // Sequential evaluation: pause at each baseline node, run the 3 tools
   for (let i = 0; i < baselinePath.length - 1; i++) {
-    const a = baselinePath[i]!;
-    const b = baselinePath[i + 1]!;
-    const linkId = linkIdForHop(a, b);
-    const live = liveStates.get(linkId);
-    const voidPhysics = voidHopPhysicsMs(config, a, b);
-
-    runDiagnosticTools(linkId, live ?? makeMissingState(linkId), trafficHistory);
-
-    if (isLinkUnsafe(linkId, live, voidPhysics, trafficHistory)) {
-      excluded.add(linkId);
-    }
+    const { linkId, unsafe } = evaluateHop(
+      config,
+      baselinePath[i]!,
+      baselinePath[i + 1]!,
+      liveStates,
+      trafficHistory,
+      "baseline",
+      agentLog,
+    );
+    if (unsafe) excluded.add(linkId);
   }
 
   let chosenPath = baselinePath;
 
-  if (excluded.size > 0 || baselinePath.some((_, i, arr) => {
+  const baselineBlocked = baselinePath.some((_, i, arr) => {
     if (i === arr.length - 1) return false;
-    const lid = canonicalLinkId(arr[i]!, arr[i + 1]!);
-    return excluded.has(lid);
-  })) {
+    return excluded.has(canonicalLinkId(arr[i]!, arr[i + 1]!));
+  });
+
+  if (excluded.size > 0 || baselineBlocked) {
     const rerouted = findChimeraRoute(config, origin_id, destination_id, {
       killed,
       killedLinks,
@@ -158,6 +243,21 @@ export async function runCopilotAgent(
       };
     }
     chosenPath = rerouted;
+
+    // Re-run diagnostics on new hops so the log covers the executed path
+    if (chosenPath.join("→") !== baselinePath.join("→")) {
+      for (let i = 0; i < chosenPath.length - 1; i++) {
+        evaluateHop(
+          config,
+          chosenPath[i]!,
+          chosenPath[i + 1]!,
+          liveStates,
+          trafficHistory,
+          "reroute",
+          agentLog,
+        );
+      }
+    }
   }
 
   const link_evaluations = buildLinkEvaluations(
@@ -186,11 +286,30 @@ export async function runCopilotAgent(
       link_evaluations,
       baselinePath,
       excluded,
+      anomalies,
     ),
   };
 
   validateCopilotReport(report);
-  return { ok: true, report };
+
+  // Decision Audit bundle: per-link scoring rationale for the chosen path
+  const audit: LinkEvaluationExplanation[] = [];
+  for (let i = 0; i < chosenPath.length - 1; i++) {
+    const a = chosenPath[i]!;
+    const b = chosenPath[i + 1]!;
+    const linkId = canonicalLinkId(a, b);
+    const live = liveStates.get(linkId) ?? makeMissingState(linkId);
+    audit.push(
+      explainLinkEvaluation(
+        linkId,
+        live,
+        voidHopPhysicsMs(config, a, b),
+        trafficHistory,
+      ),
+    );
+  }
+
+  return { ok: true, report, agent_log: agentLog, anomalies, audit };
 }
 
 function makeMissingState(linkId: string): LinkLiveState {

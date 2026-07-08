@@ -42,8 +42,10 @@ Use this script for dry-runs and live Council evaluation. **Lead roles** from [t
 1. In sidebar, enter: `Send Caelum to Aegis: Hello world`
 2. Click **CoPilot send**.
 3. Show **CoPilot report**: `chosen_path`, `link_evaluations[]`, `explanation`.
-4. Show 3D route animation on detour path (if baseline blocked).
-5. Expand **Packet trace** — encoding changes per hop on CoPilot path.
+4. Expand **Sequential agent log** — one tool step per node (congestion, trust, targeting verdicts), proving the per-hop agent loop required by the brief.
+5. Point to **Route entropy** bar — diversification metric across recent sends.
+6. Show 3D route animation on detour path (if baseline blocked).
+7. Expand **Packet trace** — encoding changes per hop on CoPilot path.
 
 **API equivalent:**
 
@@ -57,13 +59,18 @@ curl -X POST http://localhost:3000/api/copilot \
 
 ## Trial 4 — Live chaos test (Person 2 lead, Person 3 on UI)
 
-**Goal:** Sever busiest link; next message reroutes without crash.
+**Goal:** Sever the busiest link **while a packet is in flight** — the packet pivots mid-route with zero loss.
 
-1. Note current CoPilot `chosen_path` and heaviest `link_evaluations` row.
-2. Council severs that link (or use **Sever void link** in UI for dry-run).
-3. Send another CoPilot message same origin/destination.
-4. Show new path avoids severed link; explanation mentions exclusion/detour.
-5. Confirm no crash, valid unified JSON, Lmax respected.
+1. Send a CoPilot message; watch the packet animate along `chosen_path`.
+2. While it's flying, sever an upcoming link on its path (**Sever void link** in UI).
+3. The packet **does not drop**: it pivots at the next node, the remaining path is
+   re-solved live (Lmax respected), and an amber notice explains the pivot in the transit bar.
+4. Send another CoPilot message on the same pair — the unified report now excludes
+   the severed link and the explanation says why.
+5. Confirm no crash, valid unified JSON, saturated links still avoided.
+
+**Talking point:** "Traveled hops are preserved — we reroute only the remaining
+path from the packet's current position, so nothing is retransmitted."
 
 ---
 
@@ -71,8 +78,12 @@ curl -X POST http://localhost:3000/api/copilot \
 
 **Goal:** Graceful behavior on novel conditions.
 
-1. If Council injects unknown telemetry pattern, show `explanation` flags uncertainty.
-2. Agent picks safest known path or returns clear error — never treats saturated as latency 0.
+1. The anomaly guard (`src/lib/chimera/anomaly.ts`) validates every live link against
+   the trained input domain: `load_ratio` in [0, 1], non-negative latency, known
+   `link_id`s, recognized statuses, no missing telemetry.
+2. Anomalous links are **excluded from routing** (never silently mis-scored) and the
+   report shows an amber "Uncertainty flagged" banner listing each reason.
+3. Agent picks safest known path or returns clear error — never treats saturated as latency 0.
 
 ---
 
@@ -81,13 +92,16 @@ curl -X POST http://localhost:3000/api/copilot \
 **Goal:** Explain one `link_evaluations` row without reading code.
 
 1. Judge picks a row from your last CoPilot report.
-2. Person 1 walks through:
+2. **Click that row in the UI** — the Decision Audit panel opens with the full
+   scoring rationale: congestion formula with live numbers plugged in, trust
+   prior + live lie gap, targeting logistic, and the combined-cost arithmetic.
+3. Person 1 narrates from the panel:
    - Congestion: load_ratio → penalty formula
-   - Trust: prior + live lie gap vs self-reported
-   - Targeting: traffic_share logistic
+   - Trust: learned prior + live lie gap vs self-reported
+   - Targeting: traffic_share logistic + our route-history boost
    - Combined cost: physics + penalties + trust/risk weights
 
-Use `evaluateLinkWithExplanation()` from `@/lib/chimera/models` if needed for rehearsal.
+`evaluateLinkWithExplanation()` from `@/lib/chimera/models` powers the panel.
 
 ---
 
@@ -99,6 +113,11 @@ Use `evaluateLinkWithExplanation()` from `@/lib/chimera/models` if needed for re
 | 3D link colors reflect health | |
 | NL CoPilot send works | |
 | Unified report schema complete | |
+| Sequential agent log shows per-hop tool steps | |
+| Decision Audit opens on row click | |
+| Mid-flight sever pivots packet without dropping | |
+| Anomalous telemetry shows uncertainty banner | |
+| Route entropy bar updates across sends | |
 | Saturated links never selected | |
 | Phase 1 send still works | |
 | Kill planet / sever link still works | |

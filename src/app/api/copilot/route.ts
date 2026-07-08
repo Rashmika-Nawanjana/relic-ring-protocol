@@ -6,12 +6,14 @@ import { parseCopilotInput } from "@/lib/copilot/parser";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const parsed = parseCopilotInput(body);
+    const config = loadUniverseConfig();
+    // Planet vocabulary comes from config — no hardcoded IDs (dynamic parsing)
+    const planetIds = config.nodes.map((n) => n.id);
+    const parsed = parseCopilotInput(body, planetIds);
     if (!parsed.ok) {
       return NextResponse.json({ ok: false, error: parsed.error }, { status: 400 });
     }
 
-    const config = loadUniverseConfig();
     const killed = new Set<string>((body.killed as string[] | undefined) ?? []);
     const killedLinks = new Set<string>(
       (body.killed_links as string[] | undefined) ?? [],
@@ -32,7 +34,14 @@ export async function POST(request: Request) {
       return NextResponse.json(result, { status: 422 });
     }
 
-    return NextResponse.json({ ok: true, ...result.report });
+    // Unified report fields first (mandated schema), demo metadata alongside
+    return NextResponse.json({
+      ok: true,
+      ...result.report,
+      agent_log: result.agent_log,
+      anomalies: result.anomalies,
+      audit: result.audit,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Copilot agent failed";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

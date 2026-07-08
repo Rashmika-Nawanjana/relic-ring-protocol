@@ -34,8 +34,16 @@ function estimatePathLength(routeLen: number) {
 }
 
 export function PacketLiveFeed() {
-  const { config, route, routeResult, isSending, packetTransmitKey } =
-    useUniverse();
+  const {
+    config,
+    route,
+    routeResult,
+    isSending,
+    packetTransmitKey,
+    packetLegRef,
+    packetResumeProgress,
+    rerouteNotice,
+  } = useUniverse();
   const [live, setLive] = useState<PacketLiveSnapshot>(IDLE);
   const progressRef = useRef(0);
 
@@ -68,11 +76,13 @@ export function PacketLiveFeed() {
 
     if (!routeResult?.ok || route.length < 2) {
       progressRef.current = 0;
+      packetLegRef.current = 0;
       setLive(IDLE);
       return;
     }
 
-    progressRef.current = 0;
+    // Resume mid-path after a chaos reroute; 0 on a fresh transmit
+    progressRef.current = packetResumeProgress;
     let raf = 0;
     let last = performance.now();
     const pathLen = estimatePathLength(route.length);
@@ -89,6 +99,7 @@ export function PacketLiveFeed() {
         towerRoutes,
         encodingsByPlanet,
       );
+      packetLegRef.current = snapshot.legIndex;
       setLive(snapshot);
       raf = requestAnimationFrame(tick);
     };
@@ -100,8 +111,10 @@ export function PacketLiveFeed() {
     routeResult,
     isSending,
     packetTransmitKey,
+    packetResumeProgress,
     towerRoutes,
     encodingsByPlanet,
+    packetLegRef,
   ]);
 
   const hasRoute = routeResult?.ok && route.length >= 1;
@@ -147,6 +160,12 @@ export function PacketLiveFeed() {
           </span>
         )}
       </div>
+
+      {rerouteNotice && (
+        <p className="mt-2 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-300">
+          {rerouteNotice}
+        </p>
+      )}
 
       {hasRoute && (
         <>
