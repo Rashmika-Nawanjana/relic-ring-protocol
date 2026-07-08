@@ -18,9 +18,17 @@ export type PlanetNode = {
   refraction_index: number;
 };
 
+export type InterplanetaryLink = {
+  link_id: string;
+  planet_a: string;
+  planet_b: string;
+  capacity_units: number;
+};
+
 export type UniverseConfig = {
   universe_metadata: UniverseMetadata;
   nodes: PlanetNode[];
+  interplanetary_links?: InterplanetaryLink[];
 };
 
 export type TowerPosition = {

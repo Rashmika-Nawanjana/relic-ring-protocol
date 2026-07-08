@@ -15,7 +15,8 @@ Optional Supabase auth (not required for the simulator):
 
 ```bash
 cp .env.local.example .env.local
-# Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
+# Set CHIMERA_TEAM_KEY for Phase 2 CoPilot (/api/copilot)
+# Optional: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
 ```
 
 Production build:
@@ -37,6 +38,7 @@ Deploy to [Vercel](https://vercel.com/new) — import the repo and deploy. Supab
 | **Codec** | ASCII internal transit; encode to next-hop codex at send/receive towers |
 | **Routing** | Dijkstra with `(planet, previous)` state for path-dependent fiber costs; **Lmax** enforced on graph edges |
 | **Resilience** | Kill planets or sever void links; next packet reroutes without crashing |
+| **Chimera CoPilot** | Live `/state` poll, per-hop model scoring, true-cost reroute, unified report |
 | **Visualization** | React Three Fiber solar-system view, packet animation, live transit bar |
 
 See [problem.md](./problem.md) for the full spec and [Equations.md](./Equations.md) for formulas.
@@ -92,12 +94,71 @@ Response on success includes:
 - `per_hop_latency` — labeled fiber/tower/atmo/void breakdown
 - `packet` — `{ origin_id, destination_id, current_id, payload, hop_log, route, total_latency_ms }`
 
+### `POST /api/copilot` (Phase 2)
+
+Chimera-aware CoPilot agent. Parses natural language or structured fields, polls live `/state`, evaluates each hop with congestion/trust/targeting models, and returns the mandatory unified report.
+
+```json
+{
+  "text": "Send Caelum to Aegis: Hello world"
+}
+```
+
+Or structured:
+
+```json
+{
+  "origin": "Aegis",
+  "destination": "Caelum",
+  "message": "Hello world",
+  "exclude_links": ["Aegis-Elysium"],
+  "traffic_history": ["Caelum-Fenix"]
+}
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "origin_id": "Caelum",
+  "destination_id": "Aegis",
+  "chosen_path": ["Caelum", "Elysium", "Aegis"],
+  "link_evaluations": [
+    {
+      "link_id": "Caelum-Elysium",
+      "predicted_congestion_penalty_ms": 12.4,
+      "trust_score": 0.91,
+      "targeting_risk_score": 0.18,
+      "combined_cost": 44.2
+    }
+  ],
+  "final_latency_estimate_ms": 88.7,
+  "explanation": "Avoided direct link: trust score 0.31 (Chimera footprint flagged), routed via detour."
+}
+```
+
+Requires server env vars (see `.env.local.example`):
+
+- `CHIMERA_API_URL` — default `https://chimera.launch26.space`
+- `CHIMERA_TEAM_KEY` — your team key (`X-Team-Key` header)
+
 ---
 
 ## Project structure
 
 ```
-universe-config.json          # Dynamic universe definition
+universe-config.json          # Phase 1 universe (legacy)
+challenge/universe-config.json # Phase 2 config (+ interplanetary_links)
+src/lib/chimera/
+  client.ts                   # Chimera API (GET /links, /state)
+  state-cache.ts              # Poll cache + saturated link set
+  models/                     # Person 1: congestion, trust, targeting
+src/lib/copilot/
+  parser.ts                   # NL → origin, destination, message
+  agent.ts                    # Sequential CoPilot evaluation loop
+  router.ts                   # True-cost Dijkstra
+  schema.ts                   # Unified CopilotReport validator
 src/lib/universe/
   load.ts                     # Config loader
   geometry.ts                 # Positions, towers, void distance L
